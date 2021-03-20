@@ -53,13 +53,13 @@ pub fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 
                 (Some((Operator::ParenClose, _)), expression) => Ok(Term::Group(expression)),
                 (Some((operator, end)), _) => Err(ParseError::ParenthesisDoesNotMatch(pos, operator, end)),
                 (None, _) => Err(ParseError::NoClosingParenthesis(pos)),
-            }
+            },
             Operator::Plus => Ok(Term::Prefix(Prefix::Add, Box::new(parse_term(iter)?))),
             Operator::Minus => Ok(Term::Prefix(Prefix::Sub, Box::new(parse_term(iter)?))),
             Operator::Asterisk => Ok(Term::Prefix(Prefix::Mul, Box::new(parse_term(iter)?))),
             Operator::Slash => Ok(Term::Prefix(Prefix::Div, Box::new(parse_term(iter)?))),
-            &other => Err(ParseError::UnexpectedOperator(other, pos))
-        }
+            &other => Err(ParseError::UnexpectedOperator(other, pos)),
+        },
         None => Err(ParseError::UnexpectedEndOfFile),
     }
 }
@@ -97,4 +97,50 @@ pub fn parse_expression<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(De
     };
     ret.terms.push((last, Arithmetic::Add));
     Ok((delim, ret))
+}
+
+use std::collections::HashMap;
+use super::compiler::CompileError;
+impl<'s, 'p> Term<'s, 'p> {
+    pub fn value(&self, variables: &HashMap<&'s str, f64>) -> Result<Option<f64>, CompileError<'s, 'p>> {
+        match self {
+            &Term::Identifier(s, _) => match s {
+                "null" => Ok(None),
+                s => Ok(variables.get(s).copied()),
+            },
+            Term::Literal(s, pos) => match s.parse() {
+                Ok(value) => Ok(Some(value)),
+                Err(err) => Err(CompileError::IllegalLiteral(s, pos, err)),
+            },
+            Term::Prefix(prefix, term) => Ok(term.value(variables)?.map(|value| match prefix {
+                Prefix::Add | Prefix::Mul => value,
+                Prefix::Sub => -value,
+                Prefix::Div => 1. / value,
+            })),
+            Term::Group(expression) => expression.value(variables),
+        }
+    }
+}
+
+impl<'s, 'p> Expression<'s, 'p> {
+    pub fn value(&self, variables: &HashMap<&'s str, f64>) -> Result<Option<f64>, CompileError<'s, 'p>> {
+        let mut x = 0.;
+        let mut y = 1.;
+        for (term, arithmetic) in &self.terms {
+            match term.value(variables)? {
+                Some(value) => {
+                    y *= value;
+                }
+                None => return Ok(None),
+            }
+            match arithmetic {
+                Arithmetic::Add => {
+                    x += y;
+                    y = 1.;
+                }
+                Arithmetic::Mul => {}
+            }
+        }
+        Ok(Some(x))
+    }
 }
