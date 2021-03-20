@@ -3,23 +3,19 @@ mod score;
 
 fn main() {
     match std::fs::read_to_string("test") {
-        Ok(string) => {
-            match score::lexer(&string) {
-                Ok(tokens) => {
-                    match score::parse_single_term(&mut tokens.iter()) {
-                        Ok(result) => {
-                            println!("{:?}", result);
-                        }
-                        Err(err) => {
-                            println!("{}", err);
-                        }
-                    }
+        Ok(string) => match score::lexer(&string) {
+            Ok(tokens) => match score::parse_expression(&mut tokens.iter()) {
+                Ok(result) => {
+                    println!("{:?}", result);
                 }
                 Err(err) => {
                     println!("{}", err);
                 }
+            },
+            Err(err) => {
+                println!("{}", err);
             }
-        }
+        },
         Err(err) => {
             println!("{}", err);
         }
