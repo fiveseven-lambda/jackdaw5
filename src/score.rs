@@ -4,4 +4,5 @@ mod parser;
 mod token;
 
 pub use lexer::lexer;
-pub use parser::parse_expression;
+pub use parser::parse;
+pub use compiler::compile;
