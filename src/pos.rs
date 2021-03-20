@@ -1,4 +1,3 @@
-#[derive(Debug)]
 pub struct Pos {
     line: usize,
     pos: usize,
@@ -8,8 +7,10 @@ pub trait CharPos: Iterator<Item = (usize, char)> + Sized {
     fn pos(&mut self) -> CharPosIter<Self>;
 }
 
-impl<'a> CharPos for std::str::CharIndices<'a> {
-    fn pos(&mut self) -> CharPosIter<std::str::CharIndices<'a>> {
+use std::str::CharIndices;
+
+impl<'a> CharPos for CharIndices<'a> {
+    fn pos(&mut self) -> CharPosIter<CharIndices<'a>> {
         CharPosIter { line: 1, pos: 1, char_indices: self }
     }
 }
@@ -36,7 +37,14 @@ impl<'a, Iter: Iterator<Item = (usize, char)>> Iterator for CharPosIter<'a, Iter
 }
 
 use std::fmt;
+
 impl fmt::Display for Pos {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.line, self.pos)
+    }
+}
+
+impl fmt::Debug for Pos {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{}", self.line, self.pos)
     }

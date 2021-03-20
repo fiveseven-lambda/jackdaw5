@@ -9,6 +9,7 @@ pub enum LexerError {
 
 pub fn lexer(source: &str) -> Result<Vec<TokenPos>, LexerError> {
     enum CharType {
+        Space,
         Digit(usize),
         Alphabetic(usize),
         Operator(Operator),
@@ -19,39 +20,50 @@ pub fn lexer(source: &str) -> Result<Vec<TokenPos>, LexerError> {
     let mut ret = Vec::new();
 
     for (next_index, next_char, next_pos) in source.char_indices().pos() {
-        let next = match next_char {
-            '0'..='9' | '.' => Some((CharType::Digit(next_index), next_pos)),
-            'A'..='Z' | 'a'..='z' | '_' => Some((CharType::Alphabetic(next_index), next_pos)),
-            c if c.is_ascii_whitespace() => None,
-            '+' => Some((CharType::Operator(Operator::Plus), next_pos)),
-            '-' => Some((CharType::Operator(Operator::Minus), next_pos)),
-            '*' => Some((CharType::Operator(Operator::Asterisk), next_pos)),
-            '/' => Some((CharType::Operator(Operator::Slash), next_pos)),
-            '(' => Some((CharType::Operator(Operator::ParenOpen), next_pos)),
-            ')' => Some((CharType::Operator(Operator::ParenClose), next_pos)),
-            ';' => Some((CharType::Operator(Operator::Semicolon), next_pos)),
-            '|' => Some((CharType::Operator(Operator::Bar), next_pos)),
-            ':' => Some((CharType::Operator(Operator::Colon), next_pos)),
-            '=' => Some((CharType::Operator(Operator::Equal), next_pos)),
-            ',' => Some((CharType::Operator(Operator::Comma), next_pos)),
-            '{' => Some((CharType::Operator(Operator::BraceOpen), next_pos)),
-            '}' => Some((CharType::Operator(Operator::BraceClose), next_pos)),
-            '[' => Some((CharType::Operator(Operator::BracketOpen), next_pos)),
-            ']' => Some((CharType::Operator(Operator::BracketClose), next_pos)),
+        let next = Some((match next_char {
+            '0'..='9' | '.' => CharType::Digit(next_index),
+            'A'..='Z' | 'a'..='z' | '_' => CharType::Alphabetic(next_index),
+            c if c.is_ascii_whitespace() => CharType::Space,
+            '+' => CharType::Operator(Operator::Plus),
+            '-' => CharType::Operator(Operator::Minus),
+            '*' => CharType::Operator(Operator::Asterisk),
+            '/' => CharType::Operator(Operator::Slash),
+            '(' => CharType::Operator(Operator::ParenOpen),
+            ')' => CharType::Operator(Operator::ParenClose),
+            ';' => CharType::Operator(Operator::Semicolon),
+            '|' => CharType::Operator(Operator::Bar),
+            ':' => CharType::Operator(Operator::Colon),
+            '=' => CharType::Operator(Operator::Equal),
+            ',' => CharType::Operator(Operator::Comma),
+            '{' => CharType::Operator(Operator::BraceOpen),
+            '}' => CharType::Operator(Operator::BraceClose),
+            '[' => CharType::Operator(Operator::BracketOpen),
+            ']' => CharType::Operator(Operator::BracketClose),
             c => return Err(LexerError::UnexpectedCharacter(c, next_pos)),
-        };
+        }, next_pos));
         let tuple = (prev, next);
-        match tuple {
-            (Some((CharType::Alphabetic(_), _)), Some((CharType::Alphabetic(_), _))) | (Some((CharType::Alphabetic(_), _)), Some((CharType::Digit(_), _))) | (Some((CharType::Digit(_), _)), Some((CharType::Digit(_), _))) => {
-                prev = tuple.0;
-                continue;
+        prev = match tuple {
+            | (Some((CharType::Alphabetic(_), _)), Some((CharType::Alphabetic(_), _)))
+            | (Some((CharType::Alphabetic(_), _)), Some((CharType::Digit(_), _)))
+            | (Some((CharType::Digit(_), _)), Some((CharType::Digit(_), _))) => {
+                tuple.0
             }
-            (Some((CharType::Alphabetic(prev_index), prev_pos)), _) => ret.push(TokenPos { token: Token::Identifier(&source[prev_index..next_index]), pos: prev_pos }),
-            (Some((CharType::Digit(prev_index), prev_pos)), _) => ret.push(TokenPos { token: Token::Literal(&source[prev_index..next_index]), pos: prev_pos }),
-            (Some((CharType::Operator(operator), prev_pos)), _) => ret.push(TokenPos { token: Token::Operator(operator), pos: prev_pos }),
-            (None, _) => {}
-        }
-        prev = tuple.1;
+            (Some((CharType::Alphabetic(prev_index), prev_pos)), next) => {
+                ret.push(TokenPos { token: Token::Identifier(&source[prev_index..next_index]), pos: prev_pos });
+                next
+            }
+            (Some((CharType::Digit(prev_index), prev_pos)), next) => {
+                ret.push(TokenPos { token: Token::Literal(&source[prev_index..next_index]), pos: prev_pos });
+                next
+            }
+            (Some((CharType::Operator(operator), prev_pos)), next) => {
+                ret.push(TokenPos { token: Token::Operator(operator), pos: prev_pos });
+                next
+            }
+            (_, next) => {
+                next
+            }
+        };
     }
     Ok(ret)
 }

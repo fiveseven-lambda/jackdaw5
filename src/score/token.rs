@@ -1,13 +1,15 @@
 use crate::pos::Pos;
 
-pub enum Token<'str> {
-    Identifier(&'str str),
-    Literal(&'str str),
+#[derive(Debug)]
+pub enum Token<'s> {
+    Identifier(&'s str),
+    Literal(&'s str),
     Operator(Operator),
 }
 
-pub struct TokenPos<'str> {
-    pub token: Token<'str>,
+#[derive(Debug)]
+pub struct TokenPos<'s> {
+    pub token: Token<'s>,
     pub pos: Pos,
 }
 
