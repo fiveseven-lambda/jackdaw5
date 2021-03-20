@@ -4,7 +4,7 @@ use crate::pos::Pos;
 use std::slice::Iter;
 
 #[derive(Debug)]
-pub enum Term<'s, 'p> {
+enum Term<'s, 'p> {
     Identifier(&'s str, &'p Pos),
     Literal(&'s str, &'p Pos),
     Prefix(Prefix, Box<Term<'s, 'p>>),
@@ -12,7 +12,7 @@ pub enum Term<'s, 'p> {
 }
 
 #[derive(Debug)]
-pub enum Prefix {
+enum Prefix {
     Add,
     Sub,
     Mul,
@@ -20,13 +20,13 @@ pub enum Prefix {
 }
 
 #[derive(Debug)]
-pub enum Arithmetic {
+enum Arithmetic {
     Add,
     Mul,
 }
 
 #[derive(Debug)]
-pub struct Expression<'s, 'p> {
+struct Expression<'s, 'p> {
     terms: Vec<(Term<'s, 'p>, Arithmetic)>,
 }
 
@@ -44,7 +44,7 @@ pub enum ParseError<'s, 'p> {
     UnexpectedEndOfFile,
 }
 
-pub fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 'p>, ParseError<'s, 'p>> {
+fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 'p>, ParseError<'s, 'p>> {
     match iter.next() {
         Some(TokenPos { token: Token::Identifier(identifier), pos }) => Ok(Term::Identifier(identifier, pos)),
         Some(TokenPos { token: Token::Literal(literal), pos }) => Ok(Term::Literal(literal, pos)),
@@ -66,7 +66,7 @@ pub fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 
 
 type Delim<'p> = Option<(Operator, &'p Pos)>;
 
-pub fn parse_expression<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Expression<'s, 'p>), ParseError<'s, 'p>> {
+fn parse_expression<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Expression<'s, 'p>), ParseError<'s, 'p>> {
     let mut ret = Expression { terms: Vec::new() };
     enum State {
         None,
@@ -101,10 +101,10 @@ pub fn parse_expression<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(De
 
 #[derive(Debug)]
 pub enum Notes<'s, 'p> {
-    Note(Option<&'s str>, Option<&'s str>),
-    Identifier(&'s str),
-    Row(Vec<Score<'s, 'p>>),
-    Column(Vec<Score<'s, 'p>>),
+    Note(Option<(&'s str, &'p Pos)>, Option<(&'s str, &'p Pos)>),
+    Identifier(&'s str, &'p Pos),
+    Row(Vec<Map<'s, 'p>>),
+    Column(Vec<Map<'s, 'p>>),
 }
 
 #[derive(Debug)]
@@ -114,28 +114,28 @@ pub struct Function<'s, 'p> {
 }
 
 #[derive(Debug)]
-pub struct Score<'s, 'p> {
-    notes: Notes<'s, 'p>,
-    functions: Vec<Function<'s, 'p>>,
+pub struct Map<'s, 'p> {
+    pub notes: Notes<'s, 'p>,
+    pub functions: Vec<Function<'s, 'p>>,
 }
 
-pub fn parse_score<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Vec<Score<'s, 'p>>), ParseError<'s, 'p>> {
+fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Vec<Map<'s, 'p>>), ParseError<'s, 'p>> {
     let mut ret = Vec::new();
     while let Some(TokenPos{token, pos}) = iter.next() {
         let (end, notes) = match token {
-            &Token::Operator(Operator::BraceOpen) => match parse_score(iter)? {
+            &Token::Operator(Operator::BraceOpen) => match parse_maps(iter)? {
                 (Some((Operator::BraceClose, _)), score) => (iter.next(), Notes::Row(score)),
                 (Some((operator, pos)), _) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                 (None, _) => return Err(ParseError::UnexpectedEndOfFile),
             }
-            &Token::Operator(Operator::BracketOpen) => match parse_score(iter)? {
+            &Token::Operator(Operator::BracketOpen) => match parse_maps(iter)? {
                 (Some((Operator::BracketClose, _)), score) => (iter.next(), Notes::Column(score)),
                 (Some((operator, pos)), _) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                 (None, _) => return Err(ParseError::UnexpectedEndOfFile),
             }
             &Token::Literal(_) | &Token::Operator(Operator::Slash) => {
                 let (first, mut slash) = match token {
-                    &Token::Literal(literal) => (Some(literal), false),
+                    &Token::Literal(literal) => (Some((literal, pos)), false),
                     &Token::Operator(Operator::Slash) => (None, true),
                     _ => unreachable!()
                 };
@@ -144,7 +144,7 @@ pub fn parse_score<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'
                     match iter.next() {
                         Some(&TokenPos{token: Token::Literal(literal), ref pos}) => {
                             if slash && second.is_none() {
-                                second = Some(literal);
+                                second = Some((literal, pos));
                             } else {
                                 return Err(ParseError::UnexpectedToken(literal, pos));
                             }
@@ -161,7 +161,7 @@ pub fn parse_score<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'
                 }
             }
             &Token::Operator(other) => return Err(ParseError::UnexpectedOperator(other, pos)),
-            &Token::Identifier(identifier) => (iter.next(), Notes::Identifier(identifier)),
+            &Token::Identifier(identifier) => (iter.next(), Notes::Identifier(identifier, pos)),
         };
         let mut end = match end {
             Some(TokenPos{token: Token::Identifier(token), pos})
@@ -223,7 +223,7 @@ pub fn parse_score<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'
                 other => break other,
             }
         };
-        ret.push(Score{notes: notes, functions: functions});
+        ret.push(Map{notes: notes, functions: functions});
         match delim {
             Some((Operator::Semicolon, _)) => {}
             other => return Ok((other, ret)),
@@ -232,7 +232,7 @@ pub fn parse_score<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'
     Ok((None, ret))
 }
 
-pub fn parse<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Vec<(&'s str, Score<'s, 'p>)>, ParseError<'s, 'p>> {
+pub fn parse<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Vec<(&'s str, Map<'s, 'p>)>, ParseError<'s, 'p>> {
     let mut ret = Vec::new();
     loop {
         let identifier = match iter.next() {
@@ -247,8 +247,8 @@ pub fn parse<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Vec<(&'s str, 
             Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
             None => return Err(ParseError::UnexpectedEndOfFile),
         }
-        let (delim, score) = parse_score(iter)?;
-        ret.push((identifier, Score{notes: Notes::Row(score), functions: Vec::new()}));
+        let (delim, score) = parse_maps(iter)?;
+        ret.push((identifier, Map{notes: Notes::Row(score), functions: Vec::new()}));
         match delim {
             None => return Ok(ret),
             Some((Operator::Comma, _)) => {}
@@ -298,5 +298,40 @@ impl<'s, 'p> Expression<'s, 'p> {
             }
         }
         Ok(Some(x))
+    }
+}
+
+use super::Score;
+impl<'s> Score<'s> {
+    pub fn map<'p>(&mut self, function: &Function<'s, 'p>) -> Result<(), CompileError<'s, 'p>> {
+        match self {
+            Score::Note(parameters) => {
+                let mut flag = true;
+                for (s, expression) in &function.conditions {
+                    let left = parameters.get(s);
+                    let right = expression.value(parameters)?;
+                    flag &= match (left, right) {
+                        (None, None) => true,
+                        (Some(left), Some(right)) => (left - right).abs() < 1e-5,
+                        _ => false
+                    };
+                }
+                if flag {
+                    for (s, expression) in &function.assignments {
+                        let right = expression.value(parameters)?;
+                        match right {
+                            Some(value) => parameters.insert(s, value),
+                            None => parameters.remove(s),
+                        };
+                    }
+                }
+            }
+            Score::Row(scores) | Score::Column(scores) => {
+                for score in scores {
+                    score.map(function)?;
+                }
+            }
+        };
+        Ok(())
     }
 }
