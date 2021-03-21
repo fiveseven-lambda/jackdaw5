@@ -43,12 +43,23 @@ pub fn lexer(source: &str) -> Result<Vec<TokenPos>, LexerError> {
         ));
         let tuple = (prev, next);
         prev = match tuple {
-            (Some((CharType::Alphabetic(_), _)), Some((CharType::Alphabetic(_), _))) | (Some((CharType::Alphabetic(_), _)), Some((CharType::Digit(_), _))) | (Some((CharType::Digit(_), _)), Some((CharType::Digit(_), _))) => tuple.0,
+            (Some((CharType::Alphabetic(_), _)), Some((CharType::Alphabetic(_), _)))
+            | (Some((CharType::Alphabetic(_), _)), Some((CharType::Digit(_), _)))
+            | (Some((CharType::Digit(_), _)), Some((CharType::Digit(_), _))) => tuple.0,
             (prev, next) => {
                 match prev {
-                    Some((CharType::Alphabetic(prev_index), prev_pos)) => ret.push(TokenPos { token: Token::Identifier(&source[prev_index..next_index]), pos: prev_pos }),
-                    Some((CharType::Digit(prev_index), prev_pos)) => ret.push(TokenPos { token: Token::Literal(&source[prev_index..next_index]), pos: prev_pos }),
-                    Some((CharType::Operator(operator), prev_pos)) => ret.push(TokenPos { token: Token::Operator(operator), pos: prev_pos }),
+                    Some((CharType::Alphabetic(prev_index), prev_pos)) => ret.push(TokenPos {
+                        token: Token::Identifier(&source[prev_index..next_index]),
+                        pos: prev_pos,
+                    }),
+                    Some((CharType::Digit(prev_index), prev_pos)) => ret.push(TokenPos {
+                        token: Token::Literal(&source[prev_index..next_index]),
+                        pos: prev_pos,
+                    }),
+                    Some((CharType::Operator(operator), prev_pos)) => ret.push(TokenPos {
+                        token: Token::Operator(operator),
+                        pos: prev_pos,
+                    }),
                     _ => {}
                 };
                 next

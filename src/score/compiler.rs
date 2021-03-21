@@ -1,6 +1,6 @@
-use crate::pos::Pos;
-use super::parser::{Notes, Map};
+use super::parser::{Map, Notes};
 use super::Score;
+use crate::pos::Pos;
 use std::collections::HashMap;
 
 #[derive(thiserror::Error, Debug)]
@@ -13,7 +13,10 @@ pub enum CompileError<'s, 'p> {
     NoMainScore,
 }
 
-fn compile_map<'s, 'p, 'm>(map: &'m Map<'s, 'p>, variables: &HashMap<&'s str, Score<'s>>) -> Result<Score<'s>, CompileError<'s, 'p>> {
+fn compile_map<'s, 'p, 'm>(
+    map: &'m Map<'s, 'p>,
+    variables: &HashMap<&'s str, Score<'s>>,
+) -> Result<Score<'s>, CompileError<'s, 'p>> {
     let mut score = match &map.notes {
         Notes::Note(numerator, denominator) => {
             let mut parameters = HashMap::new();
@@ -21,25 +24,23 @@ fn compile_map<'s, 'p, 'm>(map: &'m Map<'s, 'p>, variables: &HashMap<&'s str, Sc
                 Some((s, pos)) => match s.parse() {
                     Ok(val) => val,
                     Err(err) => return Err(CompileError::IllegalLiteral(s, pos, err)),
-                }
+                },
                 None => 1.,
             };
             let denominator = match denominator {
                 Some((s, pos)) => match s.parse() {
                     Ok(val) => val,
                     Err(err) => return Err(CompileError::IllegalLiteral(s, pos, err)),
-                }
+                },
                 None => 1.,
             };
             parameters.insert("f", numerator / denominator);
             Score::Note(parameters)
         }
-        Notes::Identifier(identifier, pos) => {
-            match variables.get(identifier) {
-                Some(score) => score.clone(),
-                None => return Err(CompileError::UndefinedVariable(identifier, pos)),
-            }
-        }
+        Notes::Identifier(identifier, pos) => match variables.get(identifier) {
+            Some(score) => score.clone(),
+            None => return Err(CompileError::UndefinedVariable(identifier, pos)),
+        },
         Notes::Row(maps) => {
             let mut vec = Vec::new();
             for map in maps {
@@ -61,7 +62,9 @@ fn compile_map<'s, 'p, 'm>(map: &'m Map<'s, 'p>, variables: &HashMap<&'s str, Sc
     Ok(score)
 }
 
-pub fn compile<'s, 'p, 'm>(maps: &'m [(&'s str, Map<'s, 'p>)]) -> Result<Score<'s>, CompileError<'s, 'p>> {
+pub fn compile<'s, 'p, 'm>(
+    maps: &'m [(&'s str, Map<'s, 'p>)],
+) -> Result<Score<'s>, CompileError<'s, 'p>> {
     let mut ret = HashMap::new();
     for (variable, map) in maps {
         let score = compile_map(map, &ret)?;

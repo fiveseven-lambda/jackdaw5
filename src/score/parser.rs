@@ -44,14 +44,27 @@ pub enum ParseError<'s, 'p> {
     UnexpectedEndOfFile,
 }
 
-fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 'p>, ParseError<'s, 'p>> {
+fn parse_term<'p, 's>(
+    iter: &mut Iter<'p, TokenPos<'s>>,
+) -> Result<Term<'s, 'p>, ParseError<'s, 'p>> {
     match iter.next() {
-        Some(TokenPos { token: Token::Identifier(identifier), pos }) => Ok(Term::Identifier(identifier, pos)),
-        Some(TokenPos { token: Token::Literal(literal), pos }) => Ok(Term::Literal(literal, pos)),
-        Some(TokenPos { token: Token::Operator(operator), pos }) => match operator {
+        Some(TokenPos {
+            token: Token::Identifier(identifier),
+            pos,
+        }) => Ok(Term::Identifier(identifier, pos)),
+        Some(TokenPos {
+            token: Token::Literal(literal),
+            pos,
+        }) => Ok(Term::Literal(literal, pos)),
+        Some(TokenPos {
+            token: Token::Operator(operator),
+            pos,
+        }) => match operator {
             Operator::ParenOpen => match parse_expression(iter)? {
                 (Some((Operator::ParenClose, _)), expression) => Ok(Term::Group(expression)),
-                (Some((operator, end)), _) => Err(ParseError::ParenthesisDoesNotMatch(pos, operator, end)),
+                (Some((operator, end)), _) => {
+                    Err(ParseError::ParenthesisDoesNotMatch(pos, operator, end))
+                }
                 (None, _) => Err(ParseError::NoClosingParenthesis(pos)),
             },
             Operator::Plus => Ok(Term::Prefix(Prefix::Add, Box::new(parse_term(iter)?))),
@@ -66,7 +79,9 @@ fn parse_term<'p, 's>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Term<'s, 'p>,
 
 type Delim<'p> = Option<(Operator, &'p Pos)>;
 
-fn parse_expression<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Expression<'s, 'p>), ParseError<'s, 'p>> {
+fn parse_expression<'s, 'p>(
+    iter: &mut Iter<'p, TokenPos<'s>>,
+) -> Result<(Delim<'p>, Expression<'s, 'p>), ParseError<'s, 'p>> {
     let mut ret = Expression { terms: Vec::new() };
     enum State {
         None,
@@ -82,14 +97,24 @@ fn parse_expression<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<
             State::None => term,
         };
         let (next_state, arithmetic) = match iter.next() {
-            Some(TokenPos { token: Token::Operator(operator), pos }) => match operator {
+            Some(TokenPos {
+                token: Token::Operator(operator),
+                pos,
+            }) => match operator {
                 Operator::Plus => (State::None, Arithmetic::Add),
                 Operator::Minus => (State::Subtraction, Arithmetic::Add),
                 Operator::Asterisk => (State::None, Arithmetic::Mul),
                 Operator::Slash => (State::Division, Arithmetic::Mul),
                 &other => break (term, Some((other, pos))),
             },
-            Some(TokenPos { token: Token::Identifier(token), pos }) | Some(TokenPos { token: Token::Literal(token), pos }) => return Err(ParseError::UnexpectedToken(token, pos)),
+            Some(TokenPos {
+                token: Token::Identifier(token),
+                pos,
+            })
+            | Some(TokenPos {
+                token: Token::Literal(token),
+                pos,
+            }) => return Err(ParseError::UnexpectedToken(token, pos)),
             None => break (term, None),
         };
         state = next_state;
@@ -119,37 +144,49 @@ pub struct Map<'s, 'p> {
     pub functions: Vec<Function<'s, 'p>>,
 }
 
-fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, Vec<Map<'s, 'p>>), ParseError<'s, 'p>> {
+fn parse_maps<'s, 'p>(
+    iter: &mut Iter<'p, TokenPos<'s>>,
+) -> Result<(Delim<'p>, Vec<Map<'s, 'p>>), ParseError<'s, 'p>> {
     let mut ret = Vec::new();
-    while let Some(TokenPos{token, pos}) = iter.next() {
+    while let Some(TokenPos { token, pos }) = iter.next() {
         let (end, notes) = match token {
             &Token::Operator(Operator::BraceOpen) => match parse_maps(iter)? {
                 (Some((Operator::BraceClose, _)), score) => (iter.next(), Notes::Row(score)),
-                (Some((operator, pos)), _) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                (Some((operator, pos)), _) => {
+                    return Err(ParseError::UnexpectedOperator(operator, pos))
+                }
                 (None, _) => return Err(ParseError::UnexpectedEndOfFile),
-            }
+            },
             &Token::Operator(Operator::BracketOpen) => match parse_maps(iter)? {
                 (Some((Operator::BracketClose, _)), score) => (iter.next(), Notes::Column(score)),
-                (Some((operator, pos)), _) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                (Some((operator, pos)), _) => {
+                    return Err(ParseError::UnexpectedOperator(operator, pos))
+                }
                 (None, _) => return Err(ParseError::UnexpectedEndOfFile),
-            }
+            },
             &Token::Literal(_) | &Token::Operator(Operator::Slash) => {
                 let (first, mut slash) = match token {
                     &Token::Literal(literal) => (Some((literal, pos)), false),
                     &Token::Operator(Operator::Slash) => (None, true),
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
                 let mut second = None;
                 loop {
                     match iter.next() {
-                        Some(&TokenPos{token: Token::Literal(literal), ref pos}) => {
+                        Some(&TokenPos {
+                            token: Token::Literal(literal),
+                            ref pos,
+                        }) => {
                             if slash && second.is_none() {
                                 second = Some((literal, pos));
                             } else {
                                 return Err(ParseError::UnexpectedToken(literal, pos));
                             }
                         }
-                        Some(&TokenPos{token: Token::Operator(Operator::Slash), ref pos}) => {
+                        Some(&TokenPos {
+                            token: Token::Operator(Operator::Slash),
+                            ref pos,
+                        }) => {
                             if !slash {
                                 slash = true;
                             } else {
@@ -164,9 +201,18 @@ fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, V
             &Token::Identifier(identifier) => (iter.next(), Notes::Identifier(identifier, pos)),
         };
         let mut end = match end {
-            Some(TokenPos{token: Token::Identifier(token), pos})
-            | Some(TokenPos{token: Token::Literal(token), pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-            Some(TokenPos{token: Token::Operator(operator), pos}) => Some((*operator, pos)),
+            Some(TokenPos {
+                token: Token::Identifier(token),
+                pos,
+            })
+            | Some(TokenPos {
+                token: Token::Literal(token),
+                pos,
+            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+            Some(TokenPos {
+                token: Token::Operator(operator),
+                pos,
+            }) => Some((*operator, pos)),
             None => None,
         };
         let mut functions = Vec::new();
@@ -176,16 +222,41 @@ fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, V
                     let mut conditions = Vec::new();
                     loop {
                         let identifier = match iter.next() {
-                            Some(&TokenPos{token: Token::Identifier(identifier), pos: _}) => identifier,
-                            Some(&TokenPos{token: Token::Operator(Operator::Colon), pos: _}) => break,
-                            Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                            Some(&TokenPos {
+                                token: Token::Identifier(identifier),
+                                pos: _,
+                            }) => identifier,
+                            Some(&TokenPos {
+                                token: Token::Operator(Operator::Colon),
+                                pos: _,
+                            }) => break,
+                            Some(&TokenPos {
+                                token: Token::Literal(token),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                            Some(&TokenPos {
+                                token: Token::Operator(operator),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                             None => return Err(ParseError::UnexpectedEndOfFile),
                         };
                         match iter.next() {
-                            Some(&TokenPos{token: Token::Operator(Operator::Equal), pos: _}) => {}
-                            Some(&TokenPos{token: Token::Identifier(token), ref pos}) | Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                            Some(&TokenPos {
+                                token: Token::Operator(Operator::Equal),
+                                pos: _,
+                            }) => {}
+                            Some(&TokenPos {
+                                token: Token::Identifier(token),
+                                ref pos,
+                            })
+                            | Some(&TokenPos {
+                                token: Token::Literal(token),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                            Some(&TokenPos {
+                                token: Token::Operator(operator),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                             None => return Err(ParseError::UnexpectedEndOfFile),
                         }
                         let (delim, expression) = parse_expression(iter)?;
@@ -193,37 +264,67 @@ fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, V
                         match delim {
                             Some((Operator::Colon, _)) => break,
                             Some((Operator::Comma, _)) => {}
-                            Some((operator, pos)) => return Err(ParseError::UnexpectedOperator(operator, pos)),
-                            None => return Err(ParseError::UnexpectedEndOfFile)
+                            Some((operator, pos)) => {
+                                return Err(ParseError::UnexpectedOperator(operator, pos))
+                            }
+                            None => return Err(ParseError::UnexpectedEndOfFile),
                         }
                     }
                     let mut assignments = Vec::new();
                     end = loop {
                         let identifier = match iter.next() {
-                            Some(&TokenPos{token: Token::Identifier(identifier), pos: _}) => identifier,
-                            Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                            Some(&TokenPos {
+                                token: Token::Identifier(identifier),
+                                pos: _,
+                            }) => identifier,
+                            Some(&TokenPos {
+                                token: Token::Literal(token),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                            Some(&TokenPos {
+                                token: Token::Operator(operator),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                             None => return Err(ParseError::UnexpectedEndOfFile),
                         };
                         match iter.next() {
-                            Some(TokenPos{token: Token::Operator(Operator::Equal), pos: _}) => {}
-                            Some(&TokenPos{token: Token::Identifier(token), ref pos}) | Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                            Some(TokenPos {
+                                token: Token::Operator(Operator::Equal),
+                                pos: _,
+                            }) => {}
+                            Some(&TokenPos {
+                                token: Token::Identifier(token),
+                                ref pos,
+                            })
+                            | Some(&TokenPos {
+                                token: Token::Literal(token),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                            Some(&TokenPos {
+                                token: Token::Operator(operator),
+                                ref pos,
+                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
                             None => return Err(ParseError::UnexpectedEndOfFile),
                         }
                         let (delim, expression) = parse_expression(iter)?;
                         assignments.push((identifier, expression));
                         match delim {
                             Some((Operator::Comma, _)) => {}
-                            other => break other
+                            other => break other,
                         }
                     };
-                    functions.push(Function{ conditions: conditions, assignments: assignments })
+                    functions.push(Function {
+                        conditions: conditions,
+                        assignments: assignments,
+                    })
                 }
                 other => break other,
             }
         };
-        ret.push(Map{notes: notes, functions: functions});
+        ret.push(Map {
+            notes: notes,
+            functions: functions,
+        });
         match delim {
             Some((Operator::Semicolon, _)) => {}
             other => return Ok((other, ret)),
@@ -232,23 +333,53 @@ fn parse_maps<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<(Delim<'p>, V
     Ok((None, ret))
 }
 
-pub fn parse<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Vec<(&'s str, Map<'s, 'p>)>, ParseError<'s, 'p>> {
+pub fn parse<'s, 'p>(
+    iter: &mut Iter<'p, TokenPos<'s>>,
+) -> Result<Vec<(&'s str, Map<'s, 'p>)>, ParseError<'s, 'p>> {
     let mut ret = Vec::new();
     loop {
         let identifier = match iter.next() {
-            Some(&TokenPos{token: Token::Identifier(identifier), pos: _}) => identifier,
-            Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+            Some(&TokenPos {
+                token: Token::Identifier(identifier),
+                pos: _,
+            }) => identifier,
+            Some(&TokenPos {
+                token: Token::Literal(token),
+                ref pos,
+            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+            Some(&TokenPos {
+                token: Token::Operator(operator),
+                ref pos,
+            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
             None => return Err(ParseError::UnexpectedEndOfFile),
         };
         match iter.next() {
-            Some(TokenPos{token: Token::Operator(Operator::Equal), pos: _}) => {}
-            Some(&TokenPos{token: Token::Identifier(token), ref pos}) | Some(&TokenPos{token: Token::Literal(token), ref pos}) => return Err(ParseError::UnexpectedToken(token, pos)),
-            Some(&TokenPos{token: Token::Operator(operator), ref pos}) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+            Some(TokenPos {
+                token: Token::Operator(Operator::Equal),
+                pos: _,
+            }) => {}
+            Some(&TokenPos {
+                token: Token::Identifier(token),
+                ref pos,
+            })
+            | Some(&TokenPos {
+                token: Token::Literal(token),
+                ref pos,
+            }) => return Err(ParseError::UnexpectedToken(token, pos)),
+            Some(&TokenPos {
+                token: Token::Operator(operator),
+                ref pos,
+            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
             None => return Err(ParseError::UnexpectedEndOfFile),
         }
         let (delim, score) = parse_maps(iter)?;
-        ret.push((identifier, Map{notes: Notes::Row(score), functions: Vec::new()}));
+        ret.push((
+            identifier,
+            Map {
+                notes: Notes::Row(score),
+                functions: Vec::new(),
+            },
+        ));
         match delim {
             None => return Ok(ret),
             Some((Operator::Comma, _)) => {}
@@ -257,10 +388,13 @@ pub fn parse<'s, 'p>(iter: &mut Iter<'p, TokenPos<'s>>) -> Result<Vec<(&'s str, 
     }
 }
 
-use std::collections::HashMap;
 use super::compiler::CompileError;
+use std::collections::HashMap;
 impl<'s, 'p> Term<'s, 'p> {
-    pub fn value(&self, variables: &HashMap<&'s str, f64>) -> Result<Option<f64>, CompileError<'s, 'p>> {
+    pub fn value(
+        &self,
+        variables: &HashMap<&'s str, f64>,
+    ) -> Result<Option<f64>, CompileError<'s, 'p>> {
         match self {
             &Term::Identifier(s, _) => match s {
                 "null" => Ok(None),
@@ -281,7 +415,10 @@ impl<'s, 'p> Term<'s, 'p> {
 }
 
 impl<'s, 'p> Expression<'s, 'p> {
-    pub fn value(&self, variables: &HashMap<&'s str, f64>) -> Result<Option<f64>, CompileError<'s, 'p>> {
+    pub fn value(
+        &self,
+        variables: &HashMap<&'s str, f64>,
+    ) -> Result<Option<f64>, CompileError<'s, 'p>> {
         let mut x = 0.;
         let mut y = 1.;
         for (term, arithmetic) in &self.terms {
@@ -313,7 +450,7 @@ impl<'s> Score<'s> {
                     flag &= match (left, right) {
                         (None, None) => true,
                         (Some(left), Some(right)) => (left - right).abs() < 1e-5,
-                        _ => false
+                        _ => false,
                     };
                 }
                 if flag {

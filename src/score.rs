@@ -20,12 +20,12 @@ impl<'s> Score<'s> {
                         println!("{}", err);
                         None
                     }
-                }
+                },
                 Err(err) => {
                     println!("{}", err);
                     None
                 }
-            }
+            },
             Err(err) => {
                 println!("{}", err);
                 None

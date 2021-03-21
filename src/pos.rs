@@ -11,7 +11,11 @@ use std::str::CharIndices;
 
 impl<'a> CharPos for CharIndices<'a> {
     fn pos(&mut self) -> CharPosIter<CharIndices<'a>> {
-        CharPosIter { line: 1, pos: 1, char_indices: self }
+        CharPosIter {
+            line: 1,
+            pos: 1,
+            char_indices: self,
+        }
     }
 }
 
@@ -25,7 +29,14 @@ impl<'a, Iter: Iterator<Item = (usize, char)>> Iterator for CharPosIter<'a, Iter
     type Item = (usize, char, Pos);
     fn next(&mut self) -> Option<Self::Item> {
         let (index, c) = self.char_indices.next()?;
-        let ret = (index, c, Pos { line: self.line, pos: self.pos });
+        let ret = (
+            index,
+            c,
+            Pos {
+                line: self.line,
+                pos: self.pos,
+            },
+        );
         if c == '\n' {
             self.line += 1;
             self.pos = 1;

@@ -9,7 +9,7 @@ fn main() {
                 println!("{:?}", score);
             }
             None => {}
-        }
+        },
         Err(err) => {
             println!("{}", err);
         }
