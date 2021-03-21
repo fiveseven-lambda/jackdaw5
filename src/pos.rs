@@ -29,21 +29,17 @@ impl<'a, Iter: Iterator<Item = (usize, char)>> Iterator for CharPosIter<'a, Iter
     type Item = (usize, char, Pos);
     fn next(&mut self) -> Option<Self::Item> {
         let (index, c) = self.char_indices.next()?;
-        let ret = (
-            index,
-            c,
-            Pos {
-                line: self.line,
-                pos: self.pos,
-            },
-        );
+        let pos = Pos {
+            line: self.line,
+            pos: self.pos,
+        };
         if c == '\n' {
             self.line += 1;
             self.pos = 1;
         } else {
             self.pos += 1;
         }
-        Some(ret)
+        Some((index, c, pos))
     }
 }
 
