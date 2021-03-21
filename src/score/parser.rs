@@ -135,7 +135,7 @@ pub enum Notes<'s, 'p> {
 #[derive(Debug)]
 pub struct Function<'s, 'p> {
     conditions: Vec<(&'s str, Expression<'s, 'p>)>,
-    assignments: Vec<(&'s str, Expression<'s, 'p>)>,
+    assignment: (&'s str, Expression<'s, 'p>),
 }
 
 #[derive(Debug)]
@@ -270,53 +270,46 @@ fn parse_maps<'s, 'p>(
                             None => return Err(ParseError::UnexpectedEndOfFile),
                         }
                     }
-                    let mut assignments = Vec::new();
-                    end = loop {
-                        let identifier = match iter.next() {
-                            Some(&TokenPos {
-                                token: Token::Identifier(identifier),
-                                pos: _,
-                            }) => identifier,
-                            Some(&TokenPos {
-                                token: Token::Literal(token),
-                                ref pos,
-                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos {
-                                token: Token::Operator(operator),
-                                ref pos,
-                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
-                            None => return Err(ParseError::UnexpectedEndOfFile),
-                        };
-                        match iter.next() {
-                            Some(TokenPos {
-                                token: Token::Operator(Operator::Equal),
-                                pos: _,
-                            }) => {}
-                            Some(&TokenPos {
-                                token: Token::Identifier(token),
-                                ref pos,
-                            })
-                            | Some(&TokenPos {
-                                token: Token::Literal(token),
-                                ref pos,
-                            }) => return Err(ParseError::UnexpectedToken(token, pos)),
-                            Some(&TokenPos {
-                                token: Token::Operator(operator),
-                                ref pos,
-                            }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
-                            None => return Err(ParseError::UnexpectedEndOfFile),
-                        }
-                        let (delim, expression) = parse_expression(iter)?;
-                        assignments.push((identifier, expression));
-                        match delim {
-                            Some((Operator::Colon, _)) => {}
-                            other => break other,
-                        }
+                    let identifier = match iter.next() {
+                        Some(&TokenPos {
+                            token: Token::Identifier(identifier),
+                            pos: _,
+                        }) => identifier,
+                        Some(&TokenPos {
+                            token: Token::Literal(token),
+                            ref pos,
+                        }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                        Some(&TokenPos {
+                            token: Token::Operator(operator),
+                            ref pos,
+                        }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                        None => return Err(ParseError::UnexpectedEndOfFile),
                     };
+                    match iter.next() {
+                        Some(TokenPos {
+                            token: Token::Operator(Operator::Equal),
+                            pos: _,
+                        }) => {}
+                        Some(&TokenPos {
+                            token: Token::Identifier(token),
+                            ref pos,
+                        })
+                        | Some(&TokenPos {
+                            token: Token::Literal(token),
+                            ref pos,
+                        }) => return Err(ParseError::UnexpectedToken(token, pos)),
+                        Some(&TokenPos {
+                            token: Token::Operator(operator),
+                            ref pos,
+                        }) => return Err(ParseError::UnexpectedOperator(operator, pos)),
+                        None => return Err(ParseError::UnexpectedEndOfFile),
+                    }
+                    let (delim, expression) = parse_expression(iter)?;
                     functions.push(Function {
                         conditions: conditions,
-                        assignments: assignments,
-                    })
+                        assignment: (identifier, expression),
+                    });
+                    end = delim;
                 }
                 other => break other,
             }
@@ -454,13 +447,12 @@ impl<'s> Score<'s> {
                     };
                 }
                 if flag {
-                    for (s, expression) in &function.assignments {
-                        let right = expression.value(parameters)?;
-                        match right {
-                            Some(value) => parameters.insert(s, value),
-                            None => parameters.remove(s),
-                        };
-                    }
+                    let (s, expression) = &function.assignment;
+                    let right = expression.value(parameters)?;
+                    match right {
+                        Some(value) => parameters.insert(s, value),
+                        None => parameters.remove(s),
+                    };
                 }
             }
             Score::Row(scores) | Score::Column(scores) => {
