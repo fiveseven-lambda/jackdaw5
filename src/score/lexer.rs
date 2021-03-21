@@ -8,17 +8,14 @@ pub enum LexerError {
 }
 
 pub fn lexer(source: &str) -> Result<Vec<TokenPos>, LexerError> {
+    let mut ret = Vec::new();
     enum CharType {
         Space,
         Digit(usize),
         Alphabetic(usize),
         Operator(Operator),
     }
-
     let mut prev: Option<(CharType, Pos)> = None;
-
-    let mut ret = Vec::new();
-
     for (next_index, next_char, next_pos) in source.char_indices().pos() {
         let next = Some((
             match next_char {
@@ -47,19 +44,15 @@ pub fn lexer(source: &str) -> Result<Vec<TokenPos>, LexerError> {
         let tuple = (prev, next);
         prev = match tuple {
             (Some((CharType::Alphabetic(_), _)), Some((CharType::Alphabetic(_), _))) | (Some((CharType::Alphabetic(_), _)), Some((CharType::Digit(_), _))) | (Some((CharType::Digit(_), _)), Some((CharType::Digit(_), _))) => tuple.0,
-            (Some((CharType::Alphabetic(prev_index), prev_pos)), next) => {
-                ret.push(TokenPos { token: Token::Identifier(&source[prev_index..next_index]), pos: prev_pos });
+            (prev, next) => {
+                match prev {
+                    Some((CharType::Alphabetic(prev_index), prev_pos)) => ret.push(TokenPos { token: Token::Identifier(&source[prev_index..next_index]), pos: prev_pos }),
+                    Some((CharType::Digit(prev_index), prev_pos)) => ret.push(TokenPos { token: Token::Literal(&source[prev_index..next_index]), pos: prev_pos }),
+                    Some((CharType::Operator(operator), prev_pos)) => ret.push(TokenPos { token: Token::Operator(operator), pos: prev_pos }),
+                    _ => {}
+                };
                 next
             }
-            (Some((CharType::Digit(prev_index), prev_pos)), next) => {
-                ret.push(TokenPos { token: Token::Literal(&source[prev_index..next_index]), pos: prev_pos });
-                next
-            }
-            (Some((CharType::Operator(operator), prev_pos)), next) => {
-                ret.push(TokenPos { token: Token::Operator(operator), pos: prev_pos });
-                next
-            }
-            (_, next) => next,
         };
     }
     Ok(ret)
