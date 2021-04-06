@@ -1,17 +1,21 @@
-mod pos;
-mod score;
-use score::Score;
+mod lexer;
+mod token;
 
 fn main() {
-    match std::fs::read_to_string("test") {
-        Ok(string) => match Score::from_source(&string) {
-            Some(score) => {
-                println!("{:?}", score);
+    let stdin = std::io::stdin();
+    loop {
+        let mut s = String::new();
+        match stdin.read_line(&mut s) {
+            Ok(0) => break,
+            Ok(_) => {
+                for token_pos in lexer::Lexer::new(&s) {
+                    println!("{:?}", token_pos);
+                }
             }
-            None => {}
-        },
-        Err(err) => {
-            println!("{}", err);
+            Err(err) => {
+                eprintln!("{}", err);
+                break;
+            }
         }
     }
 }
