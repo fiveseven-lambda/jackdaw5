@@ -1,21 +1,11 @@
-mod lexer;
+mod error;
+mod parse;
 mod token;
 
 fn main() {
-    let stdin = std::io::stdin();
+    let mut input = std::io::BufReader::new(std::io::stdin());
+    let mut output = Some(std::io::stdout());
     loop {
-        let mut s = String::new();
-        match stdin.read_line(&mut s) {
-            Ok(0) => break,
-            Ok(_) => {
-                for token_pos in lexer::Lexer::new(&s) {
-                    println!("{:?}", token_pos);
-                }
-            }
-            Err(err) => {
-                eprintln!("{}", err);
-                break;
-            }
-        }
+        parse::parse(&mut input, &mut output);
     }
 }
