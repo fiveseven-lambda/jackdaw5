@@ -1,8 +1,19 @@
 #[derive(Debug)]
+pub struct Pos {
+    line: usize,
+    pos: usize,
+}
+
+#[derive(Debug)]
+pub struct TokenPos {
+    token: Token,
+    pos: Pos,
+}
+
+#[derive(Debug)]
 pub struct Token {
     pub name: TokenName,
     pub lexeme: String,
-    pub line: usize,
 }
 
 #[derive(Debug)]

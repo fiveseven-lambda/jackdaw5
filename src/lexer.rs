@@ -1,3 +1,57 @@
+pub struct Lexer {
+    buffer: String,
+    cursor: usize,
+    line: usize,
+    commented: bool,
+    peeked: Option<Token>,
+}
+
+use crate::error::Error;
+use crate::token::{Operator, Token, TokenName};
+
+impl Lexer {
+    pub fn new() -> Lexer {
+        Lexer {
+            buffer: String::new(),
+            cursor: 0,
+            line: 0,
+            commented: false,
+            peeked: None,
+        }
+    }
+    pub fn add(&mut self, string: String) {
+        assert!(self.peeked.is_none());
+        self.buffer = string;
+        self.cursor = 0;
+        self.line += 1;
+    }
+    pub fn peek(&mut self) -> Result<&Option<Token>, Error> {
+        if self.peeked.is_none() {
+            let rem = &self.buffer[self.cursor..];
+            if self.commented {
+                let comment_end = "*/";
+                match rem.find(comment_end) {
+                    Some(index) => {
+                        self.cursor += index + comment_end.len();
+                        self.commented = false;
+                        return self.peek();
+                    }
+                    None => {
+                        self.peeked = None;
+                    }
+                }
+            } else {
+                let mut iter = rem.char_indices();
+            }
+        }
+        Ok(&self.peeked)
+    }
+    pub fn next(&mut self) -> Result<Option<Token>, Error> {
+        todo!();
+    }
+}
+
+/*
 pub struct Lexer<Read, Write> {
     input: Read,
     output: Option<Write>,
@@ -5,6 +59,7 @@ pub struct Lexer<Read, Write> {
     cursor: usize,
     line: usize,
     comment: bool,
+    peeked: Option<Option<Token>>,
 }
 
 use crate::error::Error;
@@ -23,6 +78,7 @@ where
             cursor: 0,
             line: 0,
             comment: false,
+            peeked: None,
         }
     }
     pub fn read(&mut self, prompt: char) -> Result<usize, std::io::Error> {
@@ -48,7 +104,7 @@ where
         let mut iter = rem.char_indices();
         let index = |tuple| match tuple {
             Some((index, _)) => index,
-            None => rem.len()
+            None => rem.len(),
         };
         if self.comment {
             let mut prev = '\0';
@@ -111,11 +167,11 @@ where
                     '&' => match iter.next() {
                         Some((_, '&')) => (iter.next(), TokenName::Operator(Operator::And)),
                         _ => break 'get_token Err(Error::SingleAmpersand(self.line)),
-                    }
+                    },
                     '|' => match iter.next() {
                         Some((_, '|')) => (iter.next(), TokenName::Operator(Operator::Or)),
                         other => (other, TokenName::Operator(Operator::Bar)),
-                    }
+                    },
                     ':' => (iter.next(), TokenName::Operator(Operator::Colon)),
                     ',' => (iter.next(), TokenName::Operator(Operator::Comma)),
                     ';' => (iter.next(), TokenName::Operator(Operator::Semicolon)),
@@ -138,3 +194,5 @@ where
         }
     }
 }
+
+*/
