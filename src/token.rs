@@ -1,43 +1,33 @@
-#[derive(Debug)]
-pub struct Pos {
-    line: usize,
-    pos: usize,
-}
-
-#[derive(Debug)]
-pub struct TokenPos {
-    token: Token,
-    pos: Pos,
-}
+use crate::pos::Pos;
 
 #[derive(Debug)]
 pub struct Token {
     pub name: TokenName,
     pub lexeme: String,
+    pub pos: Pos,
 }
 
 #[derive(Debug)]
 pub enum TokenName {
     Identifier,
-    Parameter,
-    Literal,
+    Number,
     Operator(Operator),
 }
 
 #[derive(Debug)]
 pub enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
     Equal,
-    NotEqual,
+    DoubleEqual,
+    Exclamation,
+    ExclamationEqual,
     Less,
     Greater,
-    And,
-    Or,
-    Not,
-    Assign,
+    DoubleAmpersand,
+    DoubleBar,
     Bar,
     Colon,
     Semicolon,

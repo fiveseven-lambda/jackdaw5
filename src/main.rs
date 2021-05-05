@@ -1,8 +1,10 @@
 mod error;
-mod token;
 mod lexer;
+mod pos;
+mod token;
 
 fn main() {
-    let mut lexer = lexer::Lexer::new();
-    lexer.add("abc".to_string());
+    for token in lexer::Lexer::new(std::io::BufReader::new(std::io::stdin()), true) {
+        println!("{:?}", token);
+    }
 }
