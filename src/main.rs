@@ -1,8 +1,9 @@
-mod error;
-mod token;
-mod lexer;
+mod ast;
 
 fn main() {
-    let mut lexer = lexer::Lexer::new();
-    lexer.add("abc".to_string());
+    loop {
+        let mut s = String::new();
+        std::io::stdin().read_line(&mut s).unwrap();
+        println!("{:#?}", ast::parse_expr(&s));
+    }
 }
