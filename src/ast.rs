@@ -1,157 +1,123 @@
 #[derive(Clone, Debug)]
-pub struct Identifier<'s>(&'s str);
-pub fn parse_identifier(input: &str) -> nom::IResult<&str, Identifier> {
-    nom::combinator::map(
-        nom::bytes::complete::take_while1(
-            |c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '$'),
-        ),
-        |s| Identifier(s),
-    )(input)
-}
-
-#[derive(Clone, Debug)]
 pub enum Expr<'s> {
-    Rhs(Vec<Vec<Cond<'s>>>),
-    Substitution(Identifier<'s>, Box<Expr<'s>>),
-}
-pub fn parse_expr(input: &str) -> nom::IResult<&str, Expr> {
-    nom::branch::alt((
-        nom::combinator::map(
-            nom::sequence::tuple((
-                nom::sequence::delimited(
-                    nom::character::complete::multispace0,
-                    parse_identifier,
-                    nom::character::complete::multispace0,
-                ),
-                nom::character::complete::char('='),
-                parse_expr,
-            )),
-            |(id, _, expr)| Expr::Substitution(id, expr.into()),
-        ),
-        nom::combinator::map(
-            nom::multi::separated_list1(
-                nom::bytes::complete::tag("||"),
-                nom::multi::separated_list1(nom::bytes::complete::tag("&&"), parse_cond),
-            ),
-            |vec| Expr::Rhs(vec),
-        ),
-    ))(input)
+    Id(&'s str),
+    Num(f64),
+    Un(UnOp, Box<Expr<'s>>),
+    Bin(BinOp, Box<Expr<'s>>, Box<Expr<'s>>),
+    Inv(Box<Expr<'s>>, Vec<Expr<'s>>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Cond<'s> {
-    Side(Side<'s>),
-    Cmp(Box<Cond<'s>>, CmpOp, Side<'s>),
+pub enum UnOp {
+    Mul,
+    Div,
+    Add,
+    Sub,
+    Not,
 }
+
 #[derive(Clone, Debug)]
-pub enum CmpOp {
-    Equal,
-    NotEqual,
+pub enum BinOp {
+    Mul,
+    Div,
+    Add,
+    Sub,
     Less,
     Greater,
-}
-fn parse_cond(input: &str) -> nom::IResult<&str, Cond> {
-    let (input, head) = parse_side(input)?;
-    nom::multi::fold_many0(
-        nom::sequence::tuple((
-            nom::branch::alt((
-                nom::combinator::map(nom::bytes::complete::tag("=="), |_| CmpOp::Equal),
-                nom::combinator::map(nom::bytes::complete::tag("!="), |_| CmpOp::NotEqual),
-                nom::combinator::map(nom::character::complete::char('<'), |_| CmpOp::Less),
-                nom::combinator::map(nom::character::complete::char('>'), |_| CmpOp::Greater),
-            )),
-            parse_side,
-        )),
-        Cond::Side(head),
-        |prev, (operator, side)| Cond::Cmp(Box::new(prev), operator, side),
-    )(input)
+    Equal,
+    NotEqual,
+    And,
+    Or,
+    Subst,
 }
 
-#[derive(Clone, Debug)]
-pub enum Side<'s> {
-    Term(Term<'s>),
-    Operation(Box<Side<'s>>, AddOrSub, Term<'s>),
-}
-#[derive(Clone, Debug)]
-pub enum AddOrSub {
-    Add,
-    Sub,
-}
-fn parse_side(input: &str) -> nom::IResult<&str, Side> {
-    let (input, head) = parse_term(input)?;
-    nom::multi::fold_many0(
-        nom::sequence::tuple((
-            nom::branch::alt((
-                nom::combinator::map(nom::character::complete::char('+'), |_| AddOrSub::Add),
-                nom::combinator::map(nom::character::complete::char('-'), |_| AddOrSub::Sub),
-            )),
-            parse_term,
-        )),
-        Side::Term(head),
-        |prev, (operator, term)| Side::Operation(Box::new(prev), operator, term),
-    )(input)
+macro_rules! def_parser {
+    ($pub:vis, $name:ident, $prev:ident, $ops:expr) => {
+        $pub fn $name(input: &str) -> nom::IResult<&str, Expr> {
+            let (input, head) = $prev(input)?;
+            nom::multi::fold_many0(
+                nom::sequence::tuple(($ops, $prev)),
+                head,
+                |prev, (bin_op, factor)| Expr::Bin(bin_op, prev.into(), factor.into()),
+            )(input)
+        }
+    };
+    ($pub:vis, $name:ident, $prev:ident, $from:expr => $to:expr) => {
+        def_parser!($pub, $name, $prev, nom::combinator::map(nom::bytes::complete::tag($from), |_| $to));
+    };
+    ($pub:vis, $name:ident, $prev:ident, $($from:expr => $to:expr),+) => {
+        def_parser!($pub, $name, $prev, nom::branch::alt(($(nom::combinator::map(nom::bytes::complete::tag($from), |_| $to)),+)));
+    }
 }
 
-#[derive(Clone, Debug)]
-pub enum Term<'s> {
-    Factor(Factor<'s>),
-    Operation(Box<Term<'s>>, MulOrDiv, Factor<'s>),
-}
-#[derive(Clone, Debug)]
-pub enum MulOrDiv {
-    Mul,
-    Div,
-}
+def_parser!(, parse_expr1, parse_factor, "*" => BinOp::Mul, "/" => BinOp::Div);
+def_parser!(, parse_expr2, parse_expr1, "+" => BinOp::Add, "-" => BinOp::Sub);
+def_parser!(, parse_expr3, parse_expr2, "<" => BinOp::Less, ">" => BinOp::Greater);
+def_parser!(, parse_expr4, parse_expr3, "==" => BinOp::Equal, "!=" => BinOp::NotEqual);
+def_parser!(, parse_expr5, parse_expr4, "&&" => BinOp::And);
+def_parser!(, parse_expr6, parse_expr5, "||" => BinOp::Or);
+def_parser!(pub, parse_expr, parse_expr6, "=" => BinOp::Subst);
 
-fn parse_term(input: &str) -> nom::IResult<&str, Term> {
-    let (input, head) = parse_factor(input)?;
-    nom::multi::fold_many0(
-        nom::sequence::tuple((
-            nom::branch::alt((
-                nom::combinator::map(nom::character::complete::char('*'), |_| MulOrDiv::Mul),
-                nom::combinator::map(nom::character::complete::char('/'), |_| MulOrDiv::Div),
-            )),
-            parse_factor,
-        )),
-        Term::Factor(head),
-        |prev, (operator, factor)| Term::Operation(Box::new(prev), operator, factor),
-    )(input)
-}
+fn parse_factor(input: &str) -> nom::IResult<&str, Expr> {
+    use nom::branch::alt;
+    use nom::character::complete as character;
+    use nom::combinator::map;
+    use nom::sequence::preceded;
+    use nom::sequence::tuple;
 
-#[derive(Clone, Debug)]
-pub enum Factor<'s> {
-    Number(f64),
-    Identifier(Identifier<'s>),
-    Prefix(Prefix, Box<Factor<'s>>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Prefix {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
-
-fn parse_factor(input: &str) -> nom::IResult<&str, Factor> {
-    nom::sequence::delimited(
-        nom::character::complete::multispace0,
-        nom::branch::alt((
-            nom::combinator::map(nom::number::complete::double, |value| Factor::Number(value)),
-            nom::combinator::map(parse_identifier, |id| Factor::Identifier(id)),
-            nom::combinator::map(
-                nom::sequence::tuple((
-                    nom::branch::alt((
-                        nom::combinator::map(nom::character::complete::char('+'), |_| Prefix::Add),
-                        nom::combinator::map(nom::character::complete::char('-'), |_| Prefix::Sub),
-                        nom::combinator::map(nom::character::complete::char('*'), |_| Prefix::Mul),
-                        nom::combinator::map(nom::character::complete::char('/'), |_| Prefix::Div),
+    preceded(
+        character::multispace0,
+        alt((
+            map(
+                tuple((
+                    alt((
+                        map(character::char('+'), |_| UnOp::Add),
+                        map(character::char('-'), |_| UnOp::Sub),
+                        map(character::char('*'), |_| UnOp::Mul),
+                        map(character::char('/'), |_| UnOp::Div),
+                        map(character::char('!'), |_| UnOp::Not),
                     )),
                     parse_factor,
                 )),
-                |(prefix, factor)| Factor::Prefix(prefix, factor.into()),
+                |(un_op, factor)| Expr::Un(un_op, factor.into()),
             ),
+            parse_single,
         )),
-        nom::character::complete::multispace0,
+    )(input)
+}
+
+fn parse_single(input: &str) -> nom::IResult<&str, Expr> {
+    use nom::branch::alt;
+    use nom::bytes::complete as bytes;
+    use nom::character::complete as character;
+    use nom::combinator::map;
+    use nom::multi::fold_many0;
+    use nom::multi::separated_list0;
+    use nom::number::complete as number;
+    use nom::sequence::delimited;
+    let (input, expr) = delimited(
+        character::multispace0,
+        alt((
+            map(number::double, |value| Expr::Num(value)),
+            map(
+                bytes::take_while1(|c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '$')),
+                |s| Expr::Id(s),
+            ),
+            delimited(character::char('('), parse_expr, character::char(')')),
+        )),
+        character::multispace0,
+    )(input)?;
+    fold_many0(
+        delimited(
+            character::char('('),
+            delimited(
+                character::multispace0,
+                separated_list0(character::char(','), parse_expr),
+                character::multispace0,
+            ),
+            character::char(')'),
+        ),
+        expr,
+        |prev, args| Expr::Inv(prev.into(), args),
     )(input)
 }
