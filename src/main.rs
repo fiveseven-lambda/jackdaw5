@@ -1,9 +1,10 @@
 mod ast;
+mod token;
+
+use std::io::Read;
 
 fn main() {
-    loop {
-        let mut s = String::new();
-        std::io::stdin().read_line(&mut s).unwrap();
-        println!("{:#?}", ast::parse_expr(&s));
-    }
+    let mut s = String::new();
+    std::io::stdin().read_to_string(&mut s);
+    println!("{:#?}", token::token(&s));
 }
