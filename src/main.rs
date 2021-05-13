@@ -1,10 +1,9 @@
-mod ast;
-mod token;
-
-use std::io::Read;
+mod error;
+mod lexer;
 
 fn main() {
-    let mut s = String::new();
-    std::io::stdin().read_to_string(&mut s);
-    println!("{:#?}", token::token(&s));
+    let lexer = lexer::Lexer::new(std::io::BufReader::new(std::io::stdin()), true);
+    for c in lexer {
+        println!("{}", c.unwrap());
+    }
 }
