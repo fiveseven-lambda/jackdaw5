@@ -4,7 +4,8 @@ pub enum Expr<'s> {
     Num(f64),
     Un(UnOp, Box<Expr<'s>>),
     Bin(BinOp, Box<Expr<'s>>, Box<Expr<'s>>),
-    Inv(Box<Expr<'s>>, Vec<Expr<'s>>),
+    Inv(Box<Expr<'s>>, Box<Expr<'s>>),
+    Map(Box<Expr<'s>>, Option<Box<Expr<'s>>>, Box<Expr<'s>>),
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,7 @@ pub enum BinOp {
     And,
     Or,
     Subst,
+    Comma,
 }
 
 macro_rules! def_parser {
@@ -56,34 +58,31 @@ def_parser!(, parse_expr3, parse_expr2, "<" => BinOp::Less, ">" => BinOp::Greate
 def_parser!(, parse_expr4, parse_expr3, "==" => BinOp::Equal, "!=" => BinOp::NotEqual);
 def_parser!(, parse_expr5, parse_expr4, "&&" => BinOp::And);
 def_parser!(, parse_expr6, parse_expr5, "||" => BinOp::Or);
-def_parser!(pub, parse_expr, parse_expr6, "=" => BinOp::Subst);
+def_parser!(, parse_expr7, parse_expr6, "=" => BinOp::Subst);
+def_parser!(pub, parse_expr, parse_expr7, "," => BinOp::Comma);
 
 fn parse_factor(input: &str) -> nom::IResult<&str, Expr> {
     use nom::branch::alt;
     use nom::character::complete as character;
     use nom::combinator::map;
-    use nom::sequence::preceded;
     use nom::sequence::tuple;
 
-    preceded(
-        character::multispace0,
-        alt((
-            map(
-                tuple((
-                    alt((
-                        map(character::char('+'), |_| UnOp::Add),
-                        map(character::char('-'), |_| UnOp::Sub),
-                        map(character::char('*'), |_| UnOp::Mul),
-                        map(character::char('/'), |_| UnOp::Div),
-                        map(character::char('!'), |_| UnOp::Not),
-                    )),
-                    parse_factor,
+    alt((
+        map(
+            tuple((
+                alt((
+                    map(character::char('+'), |_| UnOp::Add),
+                    map(character::char('-'), |_| UnOp::Sub),
+                    map(character::char('*'), |_| UnOp::Mul),
+                    map(character::char('/'), |_| UnOp::Div),
+                    map(character::char('!'), |_| UnOp::Not),
                 )),
-                |(un_op, factor)| Expr::Un(un_op, factor.into()),
-            ),
-            parse_single,
-        )),
-    )(input)
+                parse_factor,
+            )),
+            |(un_op, factor)| Expr::Un(un_op, factor.into()),
+        ),
+        parse_single,
+    ))(input)
 }
 
 fn parse_single(input: &str) -> nom::IResult<&str, Expr> {
@@ -91,33 +90,35 @@ fn parse_single(input: &str) -> nom::IResult<&str, Expr> {
     use nom::bytes::complete as bytes;
     use nom::character::complete as character;
     use nom::combinator::map;
+    use nom::combinator::opt;
     use nom::multi::fold_many0;
-    use nom::multi::separated_list0;
     use nom::number::complete as number;
     use nom::sequence::delimited;
-    let (input, expr) = delimited(
-        character::multispace0,
-        alt((
-            map(number::double, |value| Expr::Num(value)),
-            map(
-                bytes::take_while1(|c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '$')),
-                |s| Expr::Id(s),
-            ),
-            delimited(character::char('('), parse_expr, character::char(')')),
-        )),
-        character::multispace0,
+    use nom::sequence::preceded;
+    use nom::sequence::tuple;
+
+    let (input, expr) = alt((
+        map(number::double, |value| Expr::Num(value)),
+        map(
+            bytes::take_while1(|c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '$')),
+            |s| Expr::Id(s),
+        ),
+        delimited(character::char('('), parse_expr, character::char(')')),
+    ))(input)?;
+    let (input, expr) = fold_many0(
+        delimited(character::char('('), parse_expr, character::char(')')),
+        expr,
+        |prev, arg| Expr::Inv(prev.into(), arg.into()),
     )(input)?;
     fold_many0(
-        delimited(
-            character::char('('),
-            delimited(
-                character::multispace0,
-                separated_list0(character::char(','), parse_expr),
-                character::multispace0,
-            ),
-            character::char(')'),
+        preceded(
+            character::char('|'),
+            tuple((parse_expr, opt(preceded(character::char(':'), parse_expr)))),
         ),
         expr,
-        |prev, args| Expr::Inv(prev.into(), args),
+        |prev, map| match map {
+            (cond, Some(map)) => Expr::Map(prev.into(), Some(cond.into()), map.into()),
+            (map, None) => Expr::Map(prev.into(), None, map.into()),
+        },
     )(input)
 }
