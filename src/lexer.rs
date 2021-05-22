@@ -43,7 +43,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             enum State {
                 Initial,
                 Identifier,
-                Number(bool),
+                Number { decimal: bool },
                 Operator(Operator),
             }
 
@@ -74,8 +74,8 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     let next = {
                         match c {
                             'A'..='Z' | 'a'..='z' | '_' | '$' => State::Identifier,
-                            '0'..='9' => State::Number(false),
-                            '.' => State::Number(true),
+                            '0'..='9' => State::Number { decimal: false },
+                            '.' => State::Number { decimal: true },
                             c if c.is_ascii_whitespace() => State::Initial,
                             _ => State::Operator(match c {
                                 '+' => Operator::Plus,
@@ -108,26 +108,31 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                             name: match prev {
                                 State::Initial => break 'token,
                                 State::Identifier => match next {
-                                    State::Identifier | State::Number(false) => continue 'entire,
+                                    State::Identifier | State::Number { decimal: false } => {
+                                        continue 'entire
+                                    }
                                     _ => TokenName::Identifier,
                                 },
-                                State::Number(prev_point) => match next {
-                                    State::Number(point) if !(prev_point && point) => {
-                                        prev = State::Number(prev_point || point);
+                                State::Number { decimal: prev_d } => match next {
+                                    State::Number { decimal: next_d } if !(prev_d && next_d) => {
+                                        prev = State::Number {
+                                            decimal: prev_d || next_d,
+                                        };
                                         continue 'entire;
                                     }
                                     _ => TokenName::Number,
                                 },
-                                State::Operator(Operator::Slash) => match next {
-                                    // これ以降はラインコメントなのでループを抜ける
-                                    State::Operator(Operator::Slash) => break 'entire,
-                                    // ブロックコメントの開始
-                                    State::Operator(Operator::Asterisk) => {
-                                        self.comment.push(self.pos(prev_pos));
-                                        continue 'entire;
-                                    }
-                                    _ => TokenName::Operator(Operator::Slash),
-                                },
+                                State::Operator(Operator::Slash)
+                                    if matches!(next, State::Operator(Operator::Slash)) =>
+                                {
+                                    break 'entire
+                                }
+                                State::Operator(Operator::Slash)
+                                    if matches!(next, State::Operator(Operator::Asterisk)) =>
+                                {
+                                    self.comment.push(self.pos(prev_pos));
+                                    continue 'entire;
+                                }
                                 State::Operator(Operator::Exclamation)
                                     if matches!(next, State::Operator(Operator::Equal)) =>
                                 {
