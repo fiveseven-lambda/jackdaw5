@@ -33,145 +33,106 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         }
         let mut s = String::new();
         if self.reader.read_line(&mut s)? == 0 {
-            match self.comment.pop() {
+            return match self.comment.pop() {
                 Some(pos) => Err(Error::UnterminatedComment(pos).into()),
                 None => Ok(false),
-            }
-        } else {
-            self.line += 1;
+            };
+        }
 
-            enum State {
-                Initial,
-                Identifier,
-                Number { decimal: bool },
-                Operator(Operator),
-            }
+        self.line += 1;
 
-            let mut prev = State::Initial;
-            let mut prev_index = 0;
-            let mut prev_pos = 0;
+        enum State {
+            Initial,
+            Identifier,
+            Number { decimal: bool },
+            Operator(Operator),
+        }
 
-            let mut iter = s.char_indices().enumerate().peekable();
+        let mut prev = State::Initial;
+        let mut prev_index = 0;
+        let mut prev_pos = 0;
 
-            'entire: while let Some((pos, (index, c))) = iter.next() {
-                if self.comment.len() > 0 {
-                    match c {
-                        '*' => {
-                            if let Some((_, (_, '/'))) = iter.peek() {
-                                iter.next();
-                                self.comment.pop();
-                            }
-                        }
-                        '/' => {
-                            if let Some((_, (_, '*'))) = iter.peek() {
-                                iter.next();
-                                self.comment.push(Pos::new(self.line, pos));
-                            }
-                        }
-                        _ => {}
+        let mut iter = s.char_indices().enumerate().peekable();
+
+        while let Some((pos, (index, c))) = iter.next() {
+            if self.comment.len() > 0 {
+                if c == '*' {
+                    if let Some((_, (_, '/'))) = iter.peek() {
+                        iter.next();
+                        self.comment.pop();
                     }
-                } else {
-                    let next = {
-                        match c {
-                            'A'..='Z' | 'a'..='z' | '_' | '$' => State::Identifier,
-                            '0'..='9' => State::Number { decimal: false },
-                            '.' => State::Number { decimal: true },
-                            c if c.is_ascii_whitespace() => State::Initial,
-                            _ => State::Operator(match c {
-                                '+' => Operator::Plus,
-                                '-' => Operator::Minus,
-                                '*' => Operator::Asterisk,
-                                '/' => Operator::Slash,
-                                '=' => Operator::Equal,
-                                '!' => Operator::Exclamation,
-                                '<' => Operator::Less,
-                                '>' => Operator::Greater,
-                                '&' => Operator::Ampersand,
-                                '|' => Operator::Bar,
-                                ':' => Operator::Colon,
-                                ';' => Operator::Semicolon,
-                                ',' => Operator::Comma,
-                                '(' => Operator::ParenOpen,
-                                ')' => Operator::ParenClose,
-                                '{' => Operator::BraceOpen,
-                                '}' => Operator::BraceClose,
-                                '[' => Operator::BracketOpen,
-                                ']' => Operator::BracketClose,
-                                _ => {
-                                    return Err(Error::UnexpectedCharacter(c, self.pos(pos)).into())
-                                }
-                            }),
-                        }
-                    };
-                    'token: loop {
-                        self.queue.push_back(Token {
+                } else if c == '/' {
+                    if let Some((_, (_, '*'))) = iter.peek() {
+                        iter.next();
+                        self.comment.push(self.pos(pos));
+                    }
+                }
+                continue;
+            }
+            let next = match c {
+                'A'..='Z' | 'a'..='z' | '_' | '$' => State::Identifier,
+                '0'..='9' => State::Number { decimal: false },
+                '.' => State::Number { decimal: true },
+                c if c.is_ascii_whitespace() => State::Initial,
+                _ => State::Operator(match c {
+                    '+' => Operator::Plus,
+                    '-' => Operator::Minus,
+                    '*' => Operator::Asterisk,
+                    '/' => Operator::Slash,
+                    '=' => Operator::Equal,
+                    '!' => Operator::Exclamation,
+                    '<' => Operator::Less,
+                    '>' => Operator::Greater,
+                    '&' => Operator::Ampersand,
+                    '|' => Operator::Bar,
+                    ':' => Operator::Colon,
+                    ';' => Operator::Semicolon,
+                    ',' => Operator::Comma,
+                    '(' => Operator::ParenOpen,
+                    ')' => Operator::ParenClose,
+                    '{' => Operator::BraceOpen,
+                    '}' => Operator::BraceClose,
+                    '[' => Operator::BracketOpen,
+                    ']' => Operator::BracketClose,
+                    _ => return Err(Error::UnexpectedCharacter(c, self.pos(pos)).into()),
+                }),
+            };
+            prev = match (prev, next) {
+                (State::Identifier, State::Identifier) | (State::Identifier, State::Number { decimal: false }) => State::Identifier,
+                (State::Number { decimal: prev_d }, State::Number { decimal: next_d }) if !(prev_d && next_d) => {
+                    State::Number { decimal: prev_d || next_d }
+                }
+                (State::Operator(Operator::Slash), State::Operator(Operator::Slash)) => return Ok(true),
+                (State::Operator(Operator::Slash), State::Operator(Operator::Asterisk)) => {
+                    self.comment.push(self.pos(prev_pos));
+                    prev = State::Initial;
+                    continue;
+                }
+                (State::Operator(Operator::Exclamation), State::Operator(Operator::Equal)) => State::Operator(Operator::ExclamationEqual),
+                (State::Operator(Operator::Equal), State::Operator(Operator::Equal)) => State::Operator(Operator::DoubleEqual),
+                (State::Operator(Operator::Ampersand), State::Operator(Operator::Ampersand)) => State::Operator(Operator::DoubleAmpersand),
+                (State::Operator(Operator::Bar), State::Operator(Operator::Bar)) => State::Operator(Operator::DoubleBar),
+                (prev, next) => {
+                    'push: loop {
+                        break self.queue.push_back(Token {
                             name: match prev {
-                                State::Initial => break 'token,
-                                State::Identifier => match next {
-                                    State::Identifier | State::Number { decimal: false } => {
-                                        continue 'entire
-                                    }
-                                    _ => TokenName::Identifier,
-                                },
-                                State::Number { decimal: prev_d } => match next {
-                                    State::Number { decimal: next_d } if !(prev_d && next_d) => {
-                                        prev = State::Number {
-                                            decimal: prev_d || next_d,
-                                        };
-                                        continue 'entire;
-                                    }
-                                    _ => TokenName::Number,
-                                },
-                                State::Operator(Operator::Slash)
-                                    if matches!(next, State::Operator(Operator::Slash)) =>
-                                {
-                                    break 'entire
-                                }
-                                State::Operator(Operator::Slash)
-                                    if matches!(next, State::Operator(Operator::Asterisk)) =>
-                                {
-                                    self.comment.push(self.pos(prev_pos));
-                                    continue 'entire;
-                                }
-                                State::Operator(Operator::Exclamation)
-                                    if matches!(next, State::Operator(Operator::Equal)) =>
-                                {
-                                    prev = State::Operator(Operator::ExclamationEqual);
-                                    continue 'entire;
-                                }
-                                State::Operator(Operator::Equal)
-                                    if matches!(next, State::Operator(Operator::Equal)) =>
-                                {
-                                    prev = State::Operator(Operator::DoubleEqual);
-                                    continue 'entire;
-                                }
-                                State::Operator(Operator::Ampersand)
-                                    if matches!(next, State::Operator(Operator::Ampersand)) =>
-                                {
-                                    prev = State::Operator(Operator::DoubleAmpersand);
-                                    continue 'entire;
-                                }
-                                State::Operator(Operator::Bar)
-                                    if matches!(next, State::Operator(Operator::Bar)) =>
-                                {
-                                    prev = State::Operator(Operator::DoubleBar);
-                                    continue 'entire;
-                                }
+                                State::Initial => break 'push,
+                                State::Identifier => TokenName::Identifier,
                                 State::Operator(operator) => TokenName::Operator(operator),
+                                State::Number { .. } => TokenName::Number,
                             },
                             lexeme: s[prev_index..index].to_string(),
                             pos: self.pos(prev_pos),
                         });
-                        break;
                     }
-                    prev = next;
                     prev_index = index;
                     prev_pos = pos;
+                    next
                 }
-            }
-
-            Ok(true)
+            };
         }
+
+        Ok(true)
     }
 }
 
@@ -204,6 +165,7 @@ fn test_lexer() {
     /* nested
     /*/ block
     /* comment **/*/**// slash
+    tokens/* are separated by */comment
     operators: 
     + - * /
     == != < >
@@ -213,10 +175,7 @@ fn test_lexer() {
     ";
 
     let tokens: Vec<_> = Lexer::new(input, false).collect::<Result<_, _>>().unwrap();
-    let lexemes: Vec<_> = tokens
-        .into_iter()
-        .map(|Token { lexeme, .. }| lexeme)
-        .collect();
+    let lexemes: Vec<_> = tokens.into_iter().map(|Token { lexeme, .. }| lexeme).collect();
 
     assert_eq!(
         lexemes,
@@ -242,6 +201,8 @@ fn test_lexer() {
             "2",
             "/",
             "slash",
+            "tokens",
+            "comment",
             "operators",
             ":",
             "+",

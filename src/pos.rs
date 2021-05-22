@@ -5,10 +5,7 @@ pub struct Pos {
 
 impl Pos {
     pub fn new(line: usize, pos: usize) -> Pos {
-        Pos {
-            line: line,
-            pos: pos,
-        }
+        Pos { line: line, pos: pos }
     }
 }
 
