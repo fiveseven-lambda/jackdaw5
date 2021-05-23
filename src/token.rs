@@ -33,10 +33,13 @@ pub enum Operator {
     Equal,
     Colon,
     Bar,
-    ParenOpen,
-    ParenClose,
-    BraceOpen,
-    BraceClose,
-    BracketOpen,
-    BracketClose,
+    Open(Bracket),
+    Close(Bracket),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Bracket {
+    Round,
+    Curly,
+    Square,
 }

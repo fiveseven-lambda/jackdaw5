@@ -1,7 +1,7 @@
-use crate::ast::{BinaryOperator, Expression, UnaryOperator};
+use crate::ast::{BinaryOperator, Expression, Node, UnaryOperator};
 use crate::error::Error;
 use crate::lexer::Lexer;
-use crate::token::{Operator, Token, TokenName};
+use crate::token::{Bracket, Operator, Token, TokenName};
 
 use std::io::BufRead;
 
@@ -28,12 +28,12 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
             name: TokenName::Identifier,
             lexeme,
             pos,
-        }) => Expression::Identifier(lexeme, pos),
+        }) => Some((Node::Identifier(lexeme), pos)),
         Some(Token {
             name: TokenName::Number,
             lexeme,
             pos,
-        }) => Expression::Number(lexeme, pos),
+        }) => Some((Node::Number(lexeme), pos)),
         // 前置の単項演算子
         // 優先順位は関数呼び出しより低い
         Some(Token {
@@ -43,32 +43,39 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
         }) => {
             return parse_factor(lexer).map(|incomplete| {
                 incomplete.map(|expr| {
-                    Expression::Unary(
-                        match operator {
-                            Operator::Minus => UnaryOperator::Minus,      // マイナスは負号
-                            Operator::Slash => UnaryOperator::Reciprocal, // スラッシュは逆数
-                            Operator::Exclamation => UnaryOperator::Not,  // エクスクラメーションマークは否定
-                            _ => UnaryOperator::Nop,                      // プラスとアスタリスクは何もしない
-                        },
-                        expr.into(),
+                    Some((
+                        Node::Unary(
+                            match operator {
+                                Operator::Minus => UnaryOperator::Minus,      // マイナスは負号
+                                Operator::Slash => UnaryOperator::Reciprocal, // スラッシュは逆数
+                                Operator::Exclamation => UnaryOperator::Not,  // エクスクラメーションマークは否定
+                                _ => UnaryOperator::Nop,                      // プラスとアスタリスクは何もしない
+                            },
+                            expr.into(),
+                        ),
                         pos,
-                    )
+                    ))
                 })
             });
         }
         // カッコでくくられた部分
         Some(Token {
-            name: TokenName::Operator(Operator::ParenOpen),
+            name: TokenName::Operator(Operator::Open(open)),
             lexeme: _,
             pos: pos_open,
         }) => match parse_list(lexer)? {
             Incomplete {
                 expression,
-                delimiter: Some(Token {
-                    name: TokenName::Operator(Operator::ParenClose),
-                    ..
-                }),
-            } => expression,
+                delimiter:
+                    Some(Token {
+                        name: TokenName::Operator(Operator::Close(close)),
+                        ..
+                    }),
+            } if open == close => match open {
+                Bracket::Round => expression,
+                Bracket::Curly => expression,
+                Bracket::Square => expression,
+            },
             Incomplete { expression: _, delimiter } => {
                 return Err(match delimiter {
                     Some(Token { name: _, lexeme, pos }) => Error::UnclosedParenthesisUntil(pos_open, lexeme, pos),
@@ -80,7 +87,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
         // パースでは空の式も式として認める
         other => {
             return Ok(Incomplete {
-                expression: Expression::Empty,
+                expression: None,
                 delimiter: other,
             })
         }
@@ -89,7 +96,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
         match lexer.next()? {
             // 関数呼び出し
             Some(Token {
-                name: TokenName::Operator(Operator::ParenOpen),
+                name: TokenName::Operator(Operator::Open(Bracket::Round)),
                 lexeme: _,
                 pos: pos_open,
             }) => match parse_list(lexer)? {
@@ -97,10 +104,10 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
                     expression: arg,
                     delimiter:
                         Some(Token {
-                            name: TokenName::Operator(Operator::ParenClose),
+                            name: TokenName::Operator(Operator::Close(Bracket::Round)),
                             ..
                         }),
-                } => ret = Expression::Invocation(ret.into(), arg.into()),
+                } => ret = Some((Node::Invocation(ret.into(), arg.into()), pos_open)),
                 Incomplete { expression: _, delimiter } => {
                     return Err(match delimiter {
                         Some(Token { name: _, lexeme, pos }) => Error::UnclosedParenthesisUntil(pos_open, lexeme, pos),
@@ -125,10 +132,16 @@ macro_rules! def_binary_operator{
         fn $next(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
             let mut ret = $prev(lexer)?;
             loop {
-                match ret.delimiter {
-                    $(Some(Token{name: TokenName::Operator($from), ..}) => {
-                        ret = $prev(lexer)?.map(|expr| Expression::Binary($to, ret.expression.into(), expr.into()));
-                    })*
+                match ret {
+                    $(Incomplete {
+                        expression: left,
+                        delimiter:
+                            Some(Token {
+                                name: TokenName::Operator($from),
+                                lexeme: _,
+                                pos,
+                            }),
+                    } => ret = $prev(lexer)?.map(|right| Some((Node::Binary($to, left.into(), right.into()), pos)))),*,
                     _ => break,
                 }
             }
@@ -145,11 +158,16 @@ def_binary_operator!(parse_expression4 => parse_score: Operator::DoubleAmpersand
 fn parse_map(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
     let mut ret = parse_score(lexer)?;
     loop {
-        match ret.delimiter {
-            Some(Token {
-                name: TokenName::Operator(Operator::Bar),
-                ..
-            }) => match parse_list(lexer)? {
+        match ret {
+            Incomplete {
+                expression: left,
+                delimiter:
+                    Some(Token {
+                        name: TokenName::Operator(Operator::Bar),
+                        lexeme: _,
+                        pos,
+                    }),
+            } => match parse_list(lexer)? {
                 Incomplete {
                     expression: condition,
                     delimiter:
@@ -158,11 +176,11 @@ fn parse_map(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
                             ..
                         }),
                 } => {
-                    ret = parse_list(lexer)?.map(|expression| Expression::Map(ret.expression.into(), Some(condition.into()), expression.into()));
+                    ret = parse_list(lexer)?.map(|expression| Some((Node::Map(left.into(), Some(condition.into()), expression.into()), pos)));
                 }
                 Incomplete { expression, delimiter } => {
                     ret = Incomplete {
-                        expression: Expression::Map(ret.expression.into(), None, expression.into()),
+                        expression: Some((Node::Map(left.into(), None, expression.into()), pos)),
                         delimiter: delimiter,
                     }
                 }
@@ -179,10 +197,11 @@ fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
             expression: left,
             delimiter: Some(Token {
                 name: TokenName::Operator(Operator::Equal),
+                pos,
                 ..
             }),
         }) => parse_substitution(lexer)
-            .map(|incomplete| incomplete.map(|expression| Expression::Binary(BinaryOperator::Substitute, left.into(), expression.into()))),
+            .map(|incomplete| incomplete.map(|expression| Some((Node::Binary(BinaryOperator::Substitute, left.into(), expression.into()), pos)))),
         other => other,
     }
 }

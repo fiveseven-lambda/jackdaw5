@@ -1,11 +1,12 @@
 use crate::pos::Pos;
 
+pub type Expression = Option<(Node, Pos)>;
+
 #[derive(Debug)]
-pub enum Expression {
-    Empty,
-    Identifier(String, Pos),
-    Number(String, Pos),
-    Unary(UnaryOperator, Box<Expression>, Pos),
+pub enum Node {
+    Identifier(String),
+    Number(String),
+    Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     Invocation(Box<Expression>, Box<Expression>),
     Map(Box<Expression>, Option<Box<Expression>>, Box<Expression>),

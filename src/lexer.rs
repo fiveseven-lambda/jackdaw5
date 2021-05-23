@@ -1,4 +1,4 @@
-use crate::token::{Operator, Token, TokenName};
+use crate::token::{Bracket, Operator, Token, TokenName};
 use std::collections::VecDeque;
 
 use crate::error::Error;
@@ -97,12 +97,12 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     ':' => Operator::Colon,
                     ';' => Operator::Semicolon,
                     ',' => Operator::Comma,
-                    '(' => Operator::ParenOpen,
-                    ')' => Operator::ParenClose,
-                    '{' => Operator::BraceOpen,
-                    '}' => Operator::BraceClose,
-                    '[' => Operator::BracketOpen,
-                    ']' => Operator::BracketClose,
+                    '(' => Operator::Open(Bracket::Round),
+                    ')' => Operator::Close(Bracket::Round),
+                    '{' => Operator::Open(Bracket::Curly),
+                    '}' => Operator::Close(Bracket::Curly),
+                    '[' => Operator::Open(Bracket::Square),
+                    ']' => Operator::Close(Bracket::Square),
                     _ => return Err(Error::UnexpectedCharacter(c, self.pos(pos)).into()),
                 }),
             };
