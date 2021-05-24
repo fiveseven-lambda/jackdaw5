@@ -2,7 +2,7 @@ use crate::token::{Bracket, Operator, Token, TokenName};
 use std::collections::VecDeque;
 
 use crate::error::Error;
-use crate::pos::Pos;
+use crate::pos::{Pos, Range};
 
 pub struct Lexer<BufRead> {
     reader: BufRead,
@@ -54,6 +54,8 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         let mut prev = State::Initial;
         let mut prev_index = 0;
         let mut prev_pos = 0;
+
+        let mut last_index = 0;
 
         let mut iter = s.char_indices().enumerate().peekable();
 
@@ -133,7 +135,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                                 State::Number { .. } => TokenName::Number,
                             },
                             lexeme: s[prev_index..index].to_string(),
-                            pos: self.pos(prev_pos),
+                            range: Range::new(self.pos(prev_pos), self.pos(last_index)),
                         });
                     }
                     prev_index = index;
@@ -141,7 +143,19 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     next
                 }
             };
+            last_index = index;
         }
+        // 最後に何か残っていたとき
+        self.queue.push_back(Token {
+            name: match prev {
+                State::Initial => return Ok(true),
+                State::Identifier => TokenName::Identifier,
+                State::Operator(operator) => TokenName::Operator(operator),
+                State::Number { .. } => TokenName::Number,
+            },
+            lexeme: s[prev_index..].to_string(),
+            range: Range::new(self.pos(prev_pos), self.pos(last_index)),
+        });
 
         Ok(true)
     }
@@ -152,4 +166,73 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         }
         Ok(ret)
     }
+}
+
+#[test]
+fn main() {
+    let input: &[u8] = b"
+    hoge fuga
+    100  3.14
+    xx11__$$
+    15abc  abc0.5
+    .5  12.  1.2.3.
+    white \t \r\n \x0C space
+    hoge // line comment
+    1 /* block
+    comment */ 2 //* line comment
+    /* nested
+    /*/ block
+    /* comment **/*/**// slash
+    operators: 
+    + - * /
+    == != < >
+    ! && ||
+    | : ; ,
+    ( ) { } [ ]";
+
+    let mut lexer = Lexer::new(input, false);
+
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Identifier));
+        assert_eq!(token.lexeme, "hoge");
+        assert_eq!(token.range.into_inner(), (2, 5)..=(2, 8));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Identifier));
+        assert_eq!(token.lexeme, "fuga");
+        assert_eq!(token.range.into_inner(), (2, 10)..=(2, 13));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Number));
+        assert_eq!(token.lexeme, "100");
+        assert_eq!(token.range.into_inner(), (3, 5)..=(3, 7));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Number));
+        assert_eq!(token.lexeme, "3.14");
+        assert_eq!(token.range.into_inner(), (3, 10)..=(3, 13));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Identifier));
+        assert_eq!(token.lexeme, "xx11__$$");
+        assert_eq!(token.range.into_inner(), (4, 5)..=(4, 12));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Number));
+        assert_eq!(token.lexeme, "15");
+        assert_eq!(token.range.into_inner(), (5, 5)..=(5, 6));
+    }
+    {
+        let token = lexer.next().unwrap().unwrap();
+        assert!(matches!(token.name, TokenName::Identifier));
+        assert_eq!(token.lexeme, "abc");
+        assert_eq!(token.range.into_inner(), (5, 7)..=(5, 9));
+    }
+    // assert!(lexer.next().unwrap().is_none());
 }

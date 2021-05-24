@@ -7,7 +7,6 @@ use std::io::BufRead;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-#[derive(Debug)]
 struct Incomplete {
     expression: Expression,
     delimiter: Option<Token>,
@@ -53,7 +52,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
                             },
                             expr.into(),
                         ),
-                        pos,
+                        pos, // 演算子のあった場所
                     ))
                 })
             });
@@ -73,8 +72,8 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
                     }),
             } if open == close => match open {
                 Bracket::Round => expression,
-                Bracket::Curly => expression,
-                Bracket::Square => expression,
+                Bracket::Curly => Some((Node::Row(expression.into()), pos_open)),
+                Bracket::Square => Some((Node::Column(expression.into()), pos_open)),
             },
             Incomplete { expression: _, delimiter } => {
                 return Err(match delimiter {

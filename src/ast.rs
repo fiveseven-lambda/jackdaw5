@@ -1,5 +1,6 @@
 use crate::pos::Pos;
 
+// None は空の式を表す
 pub type Expression = Option<(Node, Pos)>;
 
 #[derive(Debug)]
@@ -10,6 +11,8 @@ pub enum Node {
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     Invocation(Box<Expression>, Box<Expression>),
     Map(Box<Expression>, Option<Box<Expression>>, Box<Expression>),
+    Row(Box<Expression>),
+    Column(Box<Expression>),
 }
 
 #[derive(Debug)]
