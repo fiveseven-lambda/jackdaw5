@@ -1,7 +1,7 @@
-use crate::pos::Pos;
+use crate::pos::Range;
 
 // None は空の式を表す
-pub type Expression = Option<(Node, Pos)>;
+pub type Expression = Option<(Node, Range)>;
 
 #[derive(Debug)]
 pub enum Node {
@@ -11,6 +11,7 @@ pub enum Node {
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     Invocation(Box<Expression>, Box<Expression>),
     Map(Box<Expression>, Option<Box<Expression>>, Box<Expression>),
+    Group(Box<Expression>),
     Row(Box<Expression>),
     Column(Box<Expression>),
 }

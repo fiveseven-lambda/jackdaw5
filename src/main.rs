@@ -1,9 +1,9 @@
+mod ast;
 mod error;
 mod lexer;
 mod pos;
 mod token;
-// mod parser;
-// mod ast;
+mod parser;
 
 fn main() {
     let mut lexer = lexer::Lexer::new(std::io::BufReader::new(std::io::stdin()), true);

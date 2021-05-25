@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Display, Formatter};
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Pos {
     line: usize,
     pos: usize,
@@ -23,6 +24,7 @@ impl Debug for Pos {
     }
 }
 
+#[derive(Clone)]
 pub struct Range {
     start: Pos,
     end: Pos,
@@ -57,4 +59,19 @@ impl Range {
     pub fn into_inner(self) -> std::ops::RangeInclusive<(usize, usize)> {
         self.start.into_inner()..=self.end.into_inner()
     }
+}
+
+impl std::ops::Add<Range> for Range {
+    type Output = Range;
+    fn add(self, other: Range) -> Range {
+        Range::new(self.start.min(other.start), self.end.max(other.end))
+    }
+}
+
+#[test]
+fn test_add() {
+    assert_eq!(
+        (Range::new(Pos::new(1, 5), Pos::new(2, 6)) + Range::new(Pos::new(2, 3), Pos::new(2, 5))).into_inner(),
+        (1, 5)..=(2, 6)
+    );
 }
