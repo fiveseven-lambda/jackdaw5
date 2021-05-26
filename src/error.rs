@@ -1,17 +1,17 @@
-use crate::pos::{Pos, Range};
+use crate::pos::{CharPos, Pos};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("unexpected character `{0}` at {1}")]
-    UnexpectedCharacter(char, Pos),
+    UnexpectedCharacter(char, CharPos),
     #[error("unterminated comment (started at {0})")]
-    UnterminatedComment(Pos),
+    UnterminatedComment(CharPos),
     #[error("brace `{0}` opened at {1}, but unclosed until `{2}` at {3}")]
-    UnclosedBraceUntil(String, Range, String, Range),
+    UnclosedBraceUntil(String, Pos, String, Pos),
     #[error("brace `{0}` opened at {1}, but unclosed until end of file")]
-    UnclosedBraceUntilEndOfFile(String, Range),
+    UnclosedBraceUntilEndOfFile(String, Pos),
     #[error("unexpected token `{0}` at {1}")]
-    UnexpectedToken(String, Range),
+    UnexpectedToken(String, Pos),
     #[error("unexpected end of file")]
     UnexpectedEndOfFile,
 }

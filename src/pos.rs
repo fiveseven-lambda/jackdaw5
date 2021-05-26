@@ -1,77 +1,78 @@
 use std::fmt::{self, Debug, Display, Formatter};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Pos {
+pub struct CharPos {
     line: usize,
-    pos: usize,
+    column: usize,
+}
+
+impl CharPos {
+    pub fn new(line: usize, column: usize) -> CharPos {
+        CharPos { line: line, column: column }
+    }
+}
+
+impl Display for CharPos {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.line, self.column)
+    }
+}
+
+impl Debug for CharPos {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.line, self.column)
+    }
+}
+
+#[derive(Clone)]
+pub struct Pos {
+    start: CharPos,
+    end: CharPos,
 }
 
 impl Pos {
-    pub fn new(line: usize, pos: usize) -> Pos {
-        Pos { line: line, pos: pos }
+    pub fn new(start: CharPos, end: CharPos) -> Pos {
+        Pos { start: start, end: end }
     }
 }
 
 impl Display for Pos {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.pos)
+        write!(f, "{}-{}", self.start, self.end)
     }
 }
 
 impl Debug for Pos {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.pos)
-    }
-}
-
-#[derive(Clone)]
-pub struct Range {
-    start: Pos,
-    end: Pos,
-}
-
-impl Range {
-    pub fn new(start: Pos, end: Pos) -> Range {
-        Range { start: start, end: end }
-    }
-}
-
-impl Display for Range {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}-{}", self.start, self.end)
     }
 }
 
-impl Debug for Range {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}-{}", self.start, self.end)
+#[cfg(test)]
+impl CharPos {
+    pub fn into_inner(self) -> (usize, usize) {
+        (self.line, self.column)
     }
 }
-
 #[cfg(test)]
 impl Pos {
-    pub fn into_inner(self) -> (usize, usize) {
-        (self.line, self.pos)
-    }
-}
-#[cfg(test)]
-impl Range {
     pub fn into_inner(self) -> std::ops::RangeInclusive<(usize, usize)> {
         self.start.into_inner()..=self.end.into_inner()
     }
 }
 
-impl std::ops::Add<Range> for Range {
-    type Output = Range;
-    fn add(self, other: Range) -> Range {
-        Range::new(self.start.min(other.start), self.end.max(other.end))
+impl std::ops::Add<Pos> for Pos {
+    type Output = Pos;
+    fn add(self, other: Pos) -> Pos {
+        Pos::new(self.start.min(other.start), self.end.max(other.end))
     }
 }
-
-#[test]
-fn test_add() {
-    assert_eq!(
-        (Range::new(Pos::new(1, 5), Pos::new(2, 6)) + Range::new(Pos::new(2, 3), Pos::new(2, 5))).into_inner(),
-        (1, 5)..=(2, 6)
-    );
+impl std::ops::Add<Option<Pos>> for Pos {
+    type Output = Pos;
+    fn add(self, other: Option<Pos>) -> Pos {
+        match other {
+            Some(other) => self + other,
+            None => self,
+        }
+    }
 }

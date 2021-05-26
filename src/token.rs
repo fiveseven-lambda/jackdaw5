@@ -1,10 +1,10 @@
-use crate::pos::Range;
+use crate::pos::Pos;
 
 #[derive(Debug)]
 pub struct Token {
     pub name: TokenName,
     pub lexeme: String,
-    pub range: Range,
+    pub pos: Pos,
 }
 
 #[derive(Debug)]
