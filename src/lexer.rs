@@ -2,14 +2,14 @@ use crate::token::{Bracket, Operator, Token, TokenName};
 use std::collections::VecDeque;
 
 use crate::error::Error;
-use crate::pos::{CharPos, Pos};
+use crate::pos::{End, Pos};
 
 pub struct Lexer<BufRead> {
     reader: BufRead,
     prompt: bool,
     queue: VecDeque<Token>,
-    line: usize,
-    comment: Vec<CharPos>,
+    line: usize,       // 今何行目か
+    comment: Vec<End>, // コメントの開始点
 }
 
 impl<BufRead: std::io::BufRead> Lexer<BufRead> {
@@ -22,8 +22,8 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             comment: Vec::new(),
         }
     }
-    fn pos(&self, column: usize) -> CharPos {
-        CharPos::new(self.line, column + 1)
+    fn end(&self, column: usize) -> End {
+        End::new(self.line, column + 1)
     }
     fn read_line(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
         if self.prompt {
@@ -37,7 +37,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         if self.reader.read_line(&mut s)? == 0 {
             // end of file
             return match self.comment.pop() {
-                Some(pos) => Err(Error::UnterminatedComment(pos).into()), // コメントのまま終了した
+                Some(start) => Err(Error::UnterminatedComment(start).into()), // コメントのまま終了した
                 None => Ok(false),
             };
         }
@@ -56,6 +56,20 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         let mut prev_column = 0;
         let mut last_column = 0;
 
+        // はじめ prev は State::Initial
+        // トークンが始まると prev は State::Initial 以外になり，
+        // prev_index にはそのときのバイト位置，
+        // prev_column には column （何文字目か）が入る
+        // トークンが終わるまで prev_index, prev_column は更新されないが
+        // last_column には column が代入され続ける
+        // トークンが終わり，次の文字が読まれた段階で
+        // バイト位置 prev_index..index がトークン
+        // prev_column が最初の文字の位置， last_column が最後の文字の位置
+
+        // prev が State::Initial のうちは prev_index, prev_column, last_column の値は意味をなさないので
+        // prev の代わりに Option<(State, usize, usize, usize)> を用いて
+        // State::Initial の代わりに None とする方が良いかもしれない
+
         let mut iter = s.char_indices().enumerate().peekable();
 
         while let Some((column, (index, c))) = iter.next() {
@@ -69,7 +83,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     match iter.peek() {
                         Some((_, (_, '*'))) => {
                             iter.next(); // peek した '*' を読む
-                            self.comment.push(self.pos(column)); // コメントの開始（ネスト）
+                            self.comment.push(self.end(column)); // コメントの開始（ネスト）
                         }
                         Some((_, (_, '/'))) => {
                             return Ok(true); // ラインコメント
@@ -80,9 +94,10 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 continue;
             }
             let next = match c {
+                // もし State::Initial のときに c が現れたら
+                // State は何になるか？
                 'A'..='Z' | 'a'..='z' | '_' | '$' => State::Identifier,
                 '0'..='9' => State::Number { decimal: false },
-                '.' => State::Number { decimal: true },
                 c if c.is_ascii_whitespace() => State::Initial,
                 _ => State::Operator(match c {
                     '+' => Operator::Plus,
@@ -98,23 +113,24 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     ':' => Operator::Colon,
                     ';' => Operator::Semicolon,
                     ',' => Operator::Comma,
+                    '.' => Operator::Dot,
                     '(' => Operator::Open(Bracket::Round),
                     ')' => Operator::Close(Bracket::Round),
                     '{' => Operator::Open(Bracket::Curly),
                     '}' => Operator::Close(Bracket::Curly),
                     '[' => Operator::Open(Bracket::Square),
                     ']' => Operator::Close(Bracket::Square),
-                    _ => return Err(Error::UnexpectedCharacter(c, self.pos(column)).into()),
+                    _ => return Err(Error::UnexpectedCharacter(c, self.end(column)).into()),
                 }),
             };
             prev = match (prev, next) {
-                (State::Identifier, State::Identifier | State::Number { decimal: false }) => State::Identifier,
-                (State::Number { decimal: prev_d }, State::Number { decimal: next_d }) if !(prev_d && next_d) => {
-                    State::Number { decimal: prev_d || next_d }
-                }
+                (State::Identifier, State::Identifier | State::Number { .. }) => State::Identifier,
+                (State::Number { decimal }, State::Number { .. }) => State::Number { decimal }, // 数値リテラルに続く数字
+                (State::Number { decimal: false }, State::Operator(Operator::Dot)) => State::Number { decimal: true }, // 数値リテラル中に現れる小数点
+                (State::Operator(Operator::Dot), State::Number { .. }) => State::Number { decimal: true }, // 小数点から始まる数値リテラル
                 (State::Operator(Operator::Slash), State::Operator(Operator::Slash)) => return Ok(true), // ラインコメント
                 (State::Operator(Operator::Slash), State::Operator(Operator::Asterisk)) => {
-                    self.comment.push(self.pos(prev_column)); // ブロックコメントの開始
+                    self.comment.push(self.end(prev_column)); // ブロックコメントの開始
                     prev = State::Initial;
                     continue;
                 }
@@ -134,7 +150,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                                 State::Number { .. } => TokenName::Number,
                             },
                             lexeme: s[prev_index..index].to_string(),
-                            pos: Pos::new(self.pos(prev_column), self.pos(last_column)),
+                            pos: Pos::new(self.end(prev_column), self.end(last_column)),
                         });
                     }
                     prev_index = index;
@@ -153,7 +169,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 State::Number { .. } => TokenName::Number,
             },
             lexeme: s[prev_index..].to_string(),
-            pos: Pos::new(self.pos(prev_column), self.pos(last_column)),
+            pos: Pos::new(self.end(prev_column), self.end(last_column)),
         });
 
         Ok(true)
