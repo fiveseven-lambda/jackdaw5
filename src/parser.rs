@@ -6,16 +6,14 @@ use crate::token::{Bracket, Operator, Token, TokenName};
 
 use std::io::BufRead;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
 // パースした式と，その直後のトークン
-type Incomplete = (Expression, Option<Token>);
+type Result<T> = std::result::Result<(T, Option<Token>), Box<dyn std::error::Error>>;
 
 fn pos(expression: &Expression) -> Option<Pos> {
     expression.as_ref().map(|(pos, _)| pos.clone())
 }
 
-fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
+fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
     let mut ret = match lexer.next()? {
         Some(Token {
             name: TokenName::Identifier,
@@ -112,7 +110,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
 // 二項演算子の定義
 macro_rules! def_binary_operator {
     ($prev:ident => $next:ident: $($from:path => $to:expr),*) => {
-        fn $next(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
+        fn $next(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             let mut ret = $prev(lexer)?;
             loop {
                 match ret {
@@ -143,7 +141,7 @@ def_binary_operator!(parse_operator2 => parse_operator3: Operator::Less => Binar
 def_binary_operator!(parse_operator3 => parse_operator4: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
 def_binary_operator!(parse_operator4 => parse_operator5: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
 
-fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
+fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
     match parse_operator5(lexer) {
         Ok((
             left,
@@ -165,7 +163,7 @@ fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
     }
 }
 
-fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<(Vec<Expression>, Option<Token>)> {
+fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();
     loop {
         let (item, delimiter) = parse_substitution(lexer)?;
@@ -180,7 +178,7 @@ fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<(Vec<Expression>, Optio
     }
 }
 
-pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> Result<Option<Expression>> {
+pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> std::result::Result<Option<Expression>, Box<dyn std::error::Error>> {
     match parse_substitution(lexer)? {
         (
             expression,
