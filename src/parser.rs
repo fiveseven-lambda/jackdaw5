@@ -57,7 +57,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
             name: TokenName::Operator(Operator::Open(open)),
             lexeme: lexeme_open,
             pos: pos_open,
-        }) => match parse_list(lexer)? {
+        }) => match parse_substitution(lexer)? {
             (
                 expression,
                 Some(Token {
@@ -87,7 +87,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
                         pos: pos_close,
                         ..
                     }),
-                ) => ret = (ret.0.clone() + pos_close, Node::Invocation(Some(ret).into(), arg.into())),
+                ) => ret = (ret.0.clone() + pos_close, Node::Invocation(Some(ret).into(), arg)),
                 (_, Some(Token { lexeme, pos, .. })) => return Err(Error::UnclosedBraceUntil(lexeme_open, pos_open, lexeme, pos).into()),
                 (_, None) => return Err(Error::UnclosedBraceUntilEndOfFile(lexeme_open, pos_open).into()),
             },
@@ -143,49 +143,8 @@ def_binary_operator!(parse_operator2 => parse_operator3: Operator::Less => Binar
 def_binary_operator!(parse_operator3 => parse_operator4: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
 def_binary_operator!(parse_operator4 => parse_operator5: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
 
-fn parse_map(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
-    let mut ret = parse_operator5(lexer)?;
-    loop {
-        match ret {
-            (
-                left,
-                Some(Token {
-                    name: TokenName::Operator(Operator::Bar),
-                    pos: pos_bar,
-                    ..
-                }),
-            ) => match parse_list(lexer)? {
-                (
-                    condition,
-                    Some(Token {
-                        name: TokenName::Operator(Operator::Colon),
-                        pos: pos_colon,
-                        ..
-                    }),
-                ) => {
-                    let (right, delimiter) = parse_list(lexer)?;
-                    ret = (
-                        Some((
-                            pos(&left) + pos_bar + pos_colon + pos(&right),
-                            Node::Map(left.into(), Some(condition.into()), right.into()),
-                        )),
-                        delimiter,
-                    );
-                }
-                (right, delimiter) => {
-                    ret = (
-                        Some((pos(&left) + pos_bar + pos(&right), Node::Map(left.into(), None, right.into()))),
-                        delimiter,
-                    )
-                }
-            },
-            _ => return Ok(ret),
-        }
-    }
-}
-
 fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
-    match parse_map(lexer) {
+    match parse_operator5(lexer) {
         Ok((
             left,
             Some(Token {
@@ -206,10 +165,23 @@ fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Incomplete> {
     }
 }
 
-def_binary_operator!(parse_substitution => parse_list: Operator::Comma => BinaryOperator::Comma);
+fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<(Vec<Expression>, Option<Token>)> {
+    let mut ret = Vec::new();
+    loop {
+        let (item, delimiter) = parse_substitution(lexer)?;
+        ret.push(item);
+        match delimiter {
+            Some(Token {
+                name: TokenName::Operator(Operator::Comma),
+                ..
+            }) => {}
+            other => return Ok((ret, other)),
+        }
+    }
+}
 
 pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> Result<Option<Expression>> {
-    match parse_list(lexer)? {
+    match parse_substitution(lexer)? {
         (
             expression,
             Some(Token {

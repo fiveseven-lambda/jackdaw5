@@ -11,8 +11,7 @@ pub enum Node {
     Member(Box<Expression>, String),
     Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
-    Invocation(Box<Expression>, Box<Expression>),
-    Map(Box<Expression>, Option<Box<Expression>>, Box<Expression>),
+    Invocation(Box<Expression>, Vec<Expression>),
     Group(Bracket, Box<Expression>),
 }
 
@@ -37,5 +36,4 @@ pub enum BinaryOperator {
     And,
     Or,
     Substitute,
-    Comma,
 }
