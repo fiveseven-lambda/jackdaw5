@@ -6,7 +6,7 @@ pub type Expression = Option<(Pos, Node)>;
 
 #[derive(Debug)]
 pub enum Node {
-    Identifier(String),
+    Identifier(String, bool),
     Number(String),
     Member(Box<Expression>, String),
     Unary(UnaryOperator, Box<Expression>),

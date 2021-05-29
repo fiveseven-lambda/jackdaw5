@@ -46,7 +46,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
 
         enum State {
             Initial,
-            Identifier,
+            Identifier { dollar: bool },
             Number { decimal: bool },
             Operator(Operator),
         }
@@ -96,7 +96,8 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             let next = match c {
                 // もし State::Initial のときに c が現れたら
                 // State は何になるか？
-                'A'..='Z' | 'a'..='z' | '_' | '$' => State::Identifier,
+                'A'..='Z' | 'a'..='z' | '_' => State::Identifier { dollar: false },
+                '$' => State::Identifier { dollar: true },
                 '0'..='9' => State::Number { decimal: false },
                 c if c.is_ascii_whitespace() => State::Initial,
                 _ => State::Operator(match c {
@@ -124,7 +125,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 }),
             };
             prev = match (prev, next) {
-                (State::Identifier, State::Identifier | State::Number { .. }) => State::Identifier,
+                (State::Identifier { dollar }, State::Identifier { .. } | State::Number { .. }) => State::Identifier { dollar },
                 (State::Number { decimal }, State::Number { .. }) => State::Number { decimal }, // 数値リテラルに続く数字
                 (State::Number { decimal: false }, State::Operator(Operator::Dot)) => State::Number { decimal: true }, // 数値リテラル中に現れる小数点
                 (State::Operator(Operator::Dot), State::Number { .. }) => State::Number { decimal: true }, // 小数点から始まる数値リテラル
@@ -145,7 +146,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                         break self.queue.push_back(Token {
                             name: match prev {
                                 State::Initial => break 'push,
-                                State::Identifier => TokenName::Identifier,
+                                State::Identifier { dollar } => TokenName::Identifier { dollar },
                                 State::Operator(operator) => TokenName::Operator(operator),
                                 State::Number { .. } => TokenName::Number,
                             },
@@ -164,7 +165,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         self.queue.push_back(Token {
             name: match prev {
                 State::Initial => return Ok(true),
-                State::Identifier => TokenName::Identifier,
+                State::Identifier { dollar } => TokenName::Identifier { dollar },
                 State::Operator(operator) => TokenName::Operator(operator),
                 State::Number { .. } => TokenName::Number,
             },

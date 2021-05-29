@@ -9,7 +9,7 @@ pub struct Token {
 
 #[derive(Debug)]
 pub enum TokenName {
-    Identifier,
+    Identifier { dollar: bool },
     Number,
     Operator(Operator),
 }

@@ -16,10 +16,10 @@ fn pos(expression: &Expression) -> Option<Pos> {
 fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
     let mut ret = match lexer.next()? {
         Some(Token {
-            name: TokenName::Identifier,
+            name: TokenName::Identifier { dollar },
             lexeme,
             pos,
-        }) => (pos, Node::Identifier(lexeme)),
+        }) => (pos, Node::Identifier(lexeme, dollar)),
         Some(Token {
             name: TokenName::Number,
             lexeme,
@@ -95,7 +95,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                 ..
             }) => match lexer.next()? {
                 Some(Token {
-                    name: TokenName::Identifier,
+                    name: TokenName::Identifier { .. },
                     lexeme,
                     pos,
                 }) => ret = (ret.0.clone() + pos, Node::Member(Some(ret).into(), lexeme)),
