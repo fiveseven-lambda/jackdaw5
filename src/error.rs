@@ -14,4 +14,10 @@ pub enum Error {
     UnexpectedToken(String, Pos),
     #[error("unexpected end of file")]
     UnexpectedEndOfFile,
+    #[error("cannot parse `{0}` at {1}: {2}")]
+    FloatParseError(String, Pos, <f64 as std::str::FromStr>::Err),
+    #[error("empty expression at {0}")]
+    EmptyExpression(Pos),
+    #[error("type mismatch (expected {0}, found {1}) at {2}")]
+    TypeMismatch(&'static str, &'static str, Pos),
 }
