@@ -1,7 +1,6 @@
 use crate::ast::{BinaryOperator, Expression, Node, UnaryOperator};
 use crate::error::Error;
 use crate::lexer::Lexer;
-use crate::pos::Pos;
 use crate::token::{Bracket, Operator, Token, TokenName};
 
 use std::io::BufRead;
@@ -9,12 +8,8 @@ use std::io::BufRead;
 // パースした式と，その直後のトークン
 type Result<T> = std::result::Result<(T, Option<Token>), Box<dyn std::error::Error>>;
 
-fn pos(expression: &Expression) -> Option<Pos> {
-    expression.as_ref().map(|(pos, _)| pos.clone())
-}
-
 fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
-    let mut ret = match lexer.next()? {
+    let (mut pos, mut node) = match lexer.next()? {
         Some(Token {
             name: TokenName::Identifier { dollar },
             lexeme,
@@ -34,8 +29,8 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
         }) => {
             return parse_factor(lexer).map(|(expr, delimiter)| {
                 (
-                    Some((
-                        pos_operator + pos(&expr),
+                    Expression::new(
+                        pos_operator + expr.pos(),
                         Node::Unary(
                             match operator {
                                 Operator::Minus => UnaryOperator::Minus,
@@ -45,7 +40,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                             },
                             expr.into(),
                         ),
-                    )),
+                    ),
                     delimiter,
                 )
             })
@@ -68,7 +63,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             (_, None) => return Err(Error::UnclosedBraceUntilEndOfFile(lexeme_open, pos_open).into()),
         },
         // パースでは空の式も式として認める
-        other => return Ok((None, other)),
+        other => return Ok((Expression::empty(), other)),
     };
     loop {
         match lexer.next()? {
@@ -85,7 +80,10 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                         pos: pos_close,
                         ..
                     }),
-                ) => ret = (ret.0.clone() + pos_close, Node::Invocation(Some(ret).into(), arg)),
+                ) => {
+                    node = Node::Invocation(Expression::new(pos.clone(), node).into(), arg);
+                    pos = pos + pos_close;
+                }
                 (_, Some(Token { lexeme, pos, .. })) => return Err(Error::UnclosedBraceUntil(lexeme_open, pos_open, lexeme, pos).into()),
                 (_, None) => return Err(Error::UnclosedBraceUntilEndOfFile(lexeme_open, pos_open).into()),
             },
@@ -97,12 +95,15 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                 Some(Token {
                     name: TokenName::Identifier { .. },
                     lexeme,
-                    pos,
-                }) => ret = (ret.0.clone() + pos, Node::Member(Some(ret).into(), lexeme)),
+                    pos: pos_member,
+                }) => {
+                    node = Node::Member(Expression::new(pos.clone(), node).into(), lexeme);
+                    pos = pos + pos_member;
+                }
                 Some(Token { lexeme, pos, .. }) => return Err(Error::UnexpectedToken(lexeme, pos).into()),
                 None => return Err(Error::UnexpectedEndOfFile.into()),
             },
-            other => return Ok((Some(ret), other)),
+            other => return Ok((Expression::new(pos, node), other)),
         }
     }
 }
@@ -124,7 +125,7 @@ macro_rules! def_binary_operator {
                     ) => {
                         let (right, delimiter) = $prev(lexer)?;
                         ret = (
-                            Some((pos(&left) + pos_operator + pos(&right), Node::Binary($to, left.into(), right.into()))),
+                            Expression::new(left.pos() + pos_operator + right.pos(), Node::Binary($to, left.into(), right.into())),
                             delimiter,
                         );
                     }),*
@@ -152,10 +153,10 @@ fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             }),
         )) => parse_substitution(lexer).map(|(right, delimiter)| {
             (
-                Some((
-                    pos(&left) + pos_operator + pos(&right),
+                Expression::new(
+                    left.pos() + pos_operator + right.pos(),
                     Node::Binary(BinaryOperator::Substitute, left.into(), right.into()),
-                )),
+                ),
                 delimiter,
             )
         }),
@@ -187,8 +188,13 @@ pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> std::result::Result<
                 ..
             }),
         ) => Ok(Some(expression)),
-        (None, None) => Ok(None),
         (_, Some(Token { lexeme, pos, .. })) => Err(Error::UnexpectedToken(lexeme, pos).into()),
-        (_, None) => Err(Error::UnexpectedEndOfFile.into()),
+        (last, None) => {
+            if last.is_empty() {
+                Ok(None)
+            } else {
+                Err(Error::UnexpectedEndOfFile.into())
+            }
+        }
     }
 }

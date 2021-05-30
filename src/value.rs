@@ -1,4 +1,4 @@
-enum Value {
+pub enum Value {
     None,
     Real(f64),
 }
