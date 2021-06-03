@@ -1,8 +1,6 @@
-pub trait Sound {
-    // : Clone とか？要るかも
-    type Iter: SoundIter;
-    fn shift(&self, t: f64) -> Self;
-    fn iter(&self, samplerate: f64) -> Self::Iter;
+pub trait Sound: std::fmt::Debug {
+    fn shift(&self, t: f64) -> Box<dyn Sound>;
+    fn iter(&self, samplerate: f64) -> Box<dyn SoundIter>;
 }
 
 pub trait SoundIter {

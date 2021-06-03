@@ -71,19 +71,19 @@ impl Expression {
                     match operator {
                         UnaryOperator::Nop => match operand {
                             Value::Real(value) => Ok(Some(Value::Real(value))),
-                            Value::Bool(_) => Err(Error::TypeMismatch("real", "bool", pos.clone())),
+                            _ => todo!(),
                         },
                         UnaryOperator::Minus => match operand {
                             Value::Real(value) => Ok(Some(Value::Real(-value))),
-                            Value::Bool(_) => Err(Error::TypeMismatch("real", "bool", pos.clone())),
+                            _ => todo!(),
                         },
                         UnaryOperator::Reciprocal => match operand {
                             Value::Real(value) => Ok(Some(Value::Real(1. / value))),
-                            Value::Bool(_) => Err(Error::TypeMismatch("real", "bool", pos.clone())),
+                            _ => todo!(),
                         },
                         UnaryOperator::Not => match operand {
                             Value::Real(_) => Err(Error::TypeMismatch("bool", "real", pos.clone())),
-                            Value::Bool(value) => Ok(Some(Value::Bool(!value))),
+                            _ => todo!(),
                         },
                     }
                 }

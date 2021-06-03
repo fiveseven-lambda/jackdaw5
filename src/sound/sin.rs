@@ -1,5 +1,6 @@
 use super::{Sound, SoundIter};
 
+#[derive(Debug, Clone)]
 pub struct Sin {
     frequency: f64,
     phase: f64,
@@ -16,19 +17,18 @@ impl Sin {
     // new とか？要るなら
 }
 impl Sound for Sin {
-    type Iter = SinIter;
-    fn iter(&self, samplerate: f64) -> Self::Iter {
+    fn iter(&self, samplerate: f64) -> Box<dyn SoundIter> {
         let t = TAU * self.frequency / samplerate;
-        SinIter {
+        Box::new(SinIter {
             first: (t.cos(), t.sin()),
             next: (self.phase.cos(), self.phase.sin()),
-        }
+        })
     }
-    fn shift(&self, t: f64) -> Self {
-        Sin {
+    fn shift(&self, t: f64) -> Box<dyn Sound> {
+        Box::new(Sin {
             frequency: self.frequency,
             phase: TAU * t * self.frequency,
-        }
+        })
     }
 }
 
