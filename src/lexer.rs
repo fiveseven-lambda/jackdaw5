@@ -140,6 +140,8 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 (State::Operator(Operator::Equal), State::Operator(Operator::Equal)) => State::Operator(Operator::DoubleEqual),
                 (State::Operator(Operator::Ampersand), State::Operator(Operator::Ampersand)) => State::Operator(Operator::DoubleAmpersand),
                 (State::Operator(Operator::Bar), State::Operator(Operator::Bar)) => State::Operator(Operator::DoubleBar),
+                (State::Operator(Operator::Less), State::Operator(Operator::Less)) => State::Operator(Operator::DoubleLess),
+                (State::Operator(Operator::Greater), State::Operator(Operator::Greater)) => State::Operator(Operator::DoubleGreater),
                 (prev, next) => {
                     'push: loop {
                         // labeled-block が安定化されたら書き直す

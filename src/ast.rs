@@ -134,9 +134,7 @@ impl Expression {
                         _ => todo!(),
                     }
                 }
-                Node::Group(_, expression) => {
-                    Ok(Some(expression.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?))
-                }
+                Node::Group(_, expression) => Ok(Some(expression.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?)),
                 _ => todo!(),
             },
         }
