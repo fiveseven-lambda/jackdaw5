@@ -50,7 +50,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             name: TokenName::Operator(Operator::Open(open)),
             lexeme: lexeme_open,
             pos: pos_open,
-        }) => match parse_substitution(lexer)? {
+        }) => match parse_operator(lexer)? {
             (
                 expression,
                 Some(Token {
@@ -138,36 +138,15 @@ macro_rules! def_binary_operator {
 
 def_binary_operator!(parse_factor => parse_operator1: Operator::Asterisk => BinaryOperator::Mul, Operator::Slash => BinaryOperator::Div);
 def_binary_operator!(parse_operator1 => parse_operator2: Operator::Plus => BinaryOperator::Add, Operator::Minus => BinaryOperator::Sub);
-def_binary_operator!(parse_operator2 => parse_operator3: Operator::Less => BinaryOperator::Less, Operator::Greater => BinaryOperator::Greater);
-def_binary_operator!(parse_operator3 => parse_operator4: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
-def_binary_operator!(parse_operator4 => parse_operator5: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
-
-fn parse_substitution(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
-    match parse_operator5(lexer) {
-        Ok((
-            left,
-            Some(Token {
-                name: TokenName::Operator(Operator::Equal),
-                pos: pos_operator,
-                ..
-            }),
-        )) => parse_substitution(lexer).map(|(right, delimiter)| {
-            (
-                Expression::new(
-                    left.pos() + pos_operator + right.pos(),
-                    Node::Binary(BinaryOperator::Substitute, left.into(), right.into()),
-                ),
-                delimiter,
-            )
-        }),
-        other => other,
-    }
-}
+def_binary_operator!(parse_operator2 => parse_operator3: Operator::DoubleLess => BinaryOperator::LeftShift, Operator::DoubleGreater => BinaryOperator::RightShift);
+def_binary_operator!(parse_operator3 => parse_operator4: Operator::Less => BinaryOperator::Less, Operator::Greater => BinaryOperator::Greater);
+def_binary_operator!(parse_operator4 => parse_operator5: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
+def_binary_operator!(parse_operator5 => parse_operator: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
 
 fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();
     loop {
-        let (item, delimiter) = parse_substitution(lexer)?;
+        let (item, delimiter) = parse_operator(lexer)?;
         ret.push(item);
         match delimiter {
             Some(Token {
@@ -180,7 +159,7 @@ fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
 }
 
 pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> std::result::Result<Option<Expression>, Box<dyn std::error::Error>> {
-    match parse_substitution(lexer)? {
+    match parse_operator(lexer)? {
         (
             expression,
             Some(Token {

@@ -18,6 +18,14 @@ pub enum Error {
     FloatParseError(String, Pos, <f64 as std::str::FromStr>::Err),
     #[error("empty expression at {0}")]
     EmptyExpression(Pos),
-    #[error("type mismatch (expected {0}, found {1}) at {2}")]
-    TypeMismatch(&'static str, &'static str, Pos),
+    #[error("type mismatch, found {0}, at {1}")]
+    TypeMismatchUnary(&'static str, Pos),
+    #[error("type mismatch, left: {0} right: {1}, at {2}")]
+    TypeMismatchBinary(&'static str, &'static str, Pos),
+    #[error("not a function (at {0})")]
+    NotAFunction(Pos),
+    #[error("invocation failed at {0}")]
+    InvocationFailed(Pos),
+    #[error("undefined variable `{0}` at {1}")]
+    UndefinedVariable(String, Pos),
 }

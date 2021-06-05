@@ -3,7 +3,13 @@ use crate::token::Bracket;
 
 // None は空の式を表す
 #[derive(Debug)]
-pub struct Expression(Option<(Pos, Node)>);
+pub struct Expression(Option<PosNode>);
+
+#[derive(Debug)]
+pub struct PosNode {
+    pos: Pos,
+    node: Node,
+}
 
 #[derive(Debug)]
 pub enum Node {
@@ -32,16 +38,17 @@ pub enum BinaryOperator {
     Div,
     Less,
     Greater,
+    LeftShift,
+    RightShift,
     Equal,
     NotEqual,
     And,
     Or,
-    Substitute,
 }
 
 impl Expression {
     pub fn new(pos: Pos, node: Node) -> Expression {
-        Expression(Some((pos, node)))
+        Expression(Some(PosNode { pos: pos, node: node }))
     }
     pub fn empty() -> Expression {
         Expression(None)
@@ -50,93 +57,101 @@ impl Expression {
         self.0.is_none()
     }
     pub fn pos(&self) -> Option<Pos> {
-        self.0.as_ref().map(|(pos, _)| pos.clone())
+        self.0.as_ref().map(|PosNode { pos, .. }| pos.clone())
     }
 }
 
 use crate::error::Error;
+use crate::sound::Sound;
 use crate::value::Value;
 
+use std::collections::HashMap;
+
 impl Expression {
-    pub fn evaluate(&self) -> Result<Option<Value>, Error> {
-        match self.0 {
-            None => Ok(None),
-            Some((ref pos, ref node)) => match node {
-                Node::Number(number) => match number.parse() {
-                    Ok(value) => Ok(Some(Value::Real(value))),
-                    Err(err) => Err(Error::FloatParseError(number.clone(), pos.clone(), err)),
-                },
-                Node::Unary(operator, expression) => {
-                    let operand = expression.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?;
-                    match operator {
-                        UnaryOperator::Nop => match operand {
-                            Value::Real(value) => Ok(Some(Value::Real(value))),
-                            _ => todo!(),
-                        },
-                        UnaryOperator::Minus => match operand {
-                            Value::Real(value) => Ok(Some(Value::Real(-value))),
-                            _ => todo!(),
-                        },
-                        UnaryOperator::Reciprocal => match operand {
-                            Value::Real(value) => Ok(Some(Value::Real(1. / value))),
-                            _ => todo!(),
-                        },
-                        UnaryOperator::Not => match operand {
-                            Value::Real(_) => Err(Error::TypeMismatch("bool", "real", pos.clone())),
-                            _ => todo!(),
-                        },
-                    }
-                }
-                Node::Binary(operator, left, right) => {
-                    let left = left.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?;
-                    let right = right.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?;
-                    match operator {
-                        BinaryOperator::Add => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Real(left + right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Sub => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Real(left - right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Mul => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Real(left * right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Div => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Real(left / right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Less => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Bool(left < right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Greater => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Bool(left > right))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::Equal => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Bool((left - right).abs() <= 1e-6))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::NotEqual => match (left, right) {
-                            (Value::Real(left), Value::Real(right)) => Ok(Some(Value::Bool((left - right).abs() > 1e-6))),
-                            (_, _) => Err(Error::TypeMismatch("real", "", pos.clone())),
-                        },
-                        BinaryOperator::And => match (left, right) {
-                            (Value::Bool(left), Value::Bool(right)) => Ok(Some(Value::Bool(left && right))),
-                            (_, _) => Err(Error::TypeMismatch("bool", "", pos.clone())),
-                        },
-                        BinaryOperator::Or => match (left, right) {
-                            (Value::Bool(left), Value::Bool(right)) => Ok(Some(Value::Bool(left || right))),
-                            (_, _) => Err(Error::TypeMismatch("bool", "", pos.clone())),
-                        },
-                        _ => todo!(),
-                    }
-                }
-                Node::Group(_, expression) => Ok(Some(expression.evaluate()?.ok_or(Error::EmptyExpression(pos.clone()))?)),
-                _ => todo!(),
+    pub fn evaluate(&self, variables: &mut HashMap<String, Value>) -> Option<Result<Value, Error>> {
+        self.0.as_ref().map(|inner| inner.evaluate(variables))
+    }
+}
+
+impl PosNode {
+    pub fn evaluate(&self, variables: &mut HashMap<String, Value>) -> Result<Value, Error> {
+        match &self.node {
+            Node::Identifier(ref s, false) => variables
+                .get(s)
+                .map(Clone::clone)
+                .ok_or(Error::UndefinedVariable(s.to_string(), self.pos.clone())),
+            Node::Identifier(ref s, true) => todo!(),
+            Node::Number(ref s) => match s.parse() {
+                Ok(value) => Ok(Value::Real(value)),
+                Err(err) => Err(Error::FloatParseError(s.to_string(), self.pos.clone(), err)),
             },
+            Node::Member(_, _) => todo!(),
+            Node::Unary(operator, expression) => {
+                let value = expression.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;
+                match (operator, value) {
+                    (UnaryOperator::Nop, Value::Real(value)) => Ok(Value::Real(value)),
+                    (UnaryOperator::Minus, Value::Real(value)) => Ok(Value::Real(-value)),
+                    (UnaryOperator::Reciprocal, Value::Real(value)) => Ok(Value::Real(1. / value)),
+                    (UnaryOperator::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
+                    (_, value) => Err(Error::TypeMismatchUnary(value.typename(), self.pos.clone())),
+                }
+            }
+            Node::Binary(operator, left, right) => {
+                let left = left.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;
+                let right = right.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;
+                let (left, right) = match (operator, left, right) {
+                    (BinaryOperator::Add, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left + right)),
+                    (BinaryOperator::Sub, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left - right)),
+                    (BinaryOperator::Mul, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left * right)),
+                    (BinaryOperator::Div, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left / right)),
+                    (BinaryOperator::Less, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool(left < right)),
+                    (BinaryOperator::Greater, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool(left > right)),
+                    (BinaryOperator::LeftShift, Value::Sound(left), Value::Real(right)) => return Ok(Value::Sound(left.shift(-right))),
+                    (BinaryOperator::RightShift, Value::Sound(left), Value::Real(right)) => return Ok(Value::Sound(left.shift(right))),
+                    (BinaryOperator::Equal, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool((left - right).abs() <= 1e-6)),
+                    (BinaryOperator::NotEqual, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool((left - right).abs() > 1e-6)),
+                    (BinaryOperator::And, Value::Bool(left), Value::Bool(right)) => return Ok(Value::Bool(left && right)),
+                    (BinaryOperator::Or, Value::Bool(left), Value::Bool(right)) => return Ok(Value::Bool(left || right)),
+                    (_, Value::Real(left), Value::Sound(right)) => (Sound::Const(left), right),
+                    (_, Value::Sound(left), Value::Real(right)) => (left, Sound::Const(right)),
+                    (_, Value::Sound(left), Value::Sound(right)) => (left, right),
+                    (_, left, right) => return Err(Error::TypeMismatchBinary(left.typename(), right.typename(), self.pos.clone())),
+                };
+                let left = left.into();
+                let right = right.into();
+                match operator {
+                    BinaryOperator::Add => Ok(Value::Sound(Sound::Add(left, right))),
+                    BinaryOperator::Sub => Ok(Value::Sound(Sound::Sub(left, right))),
+                    BinaryOperator::Mul => Ok(Value::Sound(Sound::Mul(left, right))),
+                    BinaryOperator::Div => Ok(Value::Sound(Sound::Div(left, right))),
+                    _ => panic!(),
+                }
+            }
+            Node::Invocation(function, arguments) => {
+                let function = function.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;
+                let arguments = arguments
+                    .iter()
+                    .filter_map(|expression| expression.0.as_ref().map(|expression| expression.evaluate(variables)))
+                    .collect::<Result<_, _>>()?;
+                match function {
+                    Value::Fnc(function) => match function(arguments) {
+                        Some(result) => Ok(result),
+                        None => Err(Error::InvocationFailed(self.pos.clone())),
+                    },
+                    Value::Fnc0(function) => Ok(Value::Real(function())),
+                    Value::Fnc1(function) => match &arguments[..] {
+                        [Value::Real(x)] => Ok(Value::Real(function(*x))),
+                        _ => panic!(),
+                    },
+                    Value::Fnc2(function) => match &arguments[..] {
+                        [Value::Real(x), Value::Real(y)] => Ok(Value::Real(function(*x, *y))),
+                        _ => panic!(),
+                    },
+                    _ => Err(Error::NotAFunction(self.pos.clone())),
+                }
+            }
+            Node::Group(Bracket::Round, expression) => expression.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))?,
+            Node::Group(_, expression) => todo!(),
         }
     }
 }
