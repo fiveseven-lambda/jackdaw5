@@ -15,6 +15,7 @@ pub struct PosNode {
 pub enum Node {
     Identifier(String, bool),
     Number(String),
+    String(String),
     Member(Box<Expression>, String),
     Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
@@ -95,6 +96,7 @@ impl PosNode {
                 Ok(value) => Ok(Value::Real(value)),
                 Err(err) => Err(Error::FloatParseError(s.to_string(), self.pos.clone(), err)),
             },
+            Node::String(string) => Ok(Value::String(string.to_string())),
             Node::Member(_, _) => todo!(),
             Node::Unary(operator, expression) => {
                 let value = expression.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;

@@ -11,6 +11,7 @@ pub struct Token {
 pub enum TokenName {
     Identifier { dollar: bool },
     Number,
+    String,
     Operator(Operator),
 }
 

@@ -10,6 +10,7 @@ pub struct Lexer<BufRead> {
     queue: VecDeque<Token>,
     line: usize,       // 今何行目か
     comment: Vec<End>, // コメントの開始点
+    string: Option<(End, String)>, // 文字列リテラル
 }
 
 impl<BufRead: std::io::BufRead> Lexer<BufRead> {
@@ -20,6 +21,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             queue: VecDeque::new(),
             line: 0,
             comment: Vec::new(),
+            string: None,
         }
     }
     fn end(&self, column: usize) -> End {
@@ -96,12 +98,35 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 }
                 continue;
             }
+            match c {
+                '"' => {
+                    if let Some((start, string)) = self.string.take() {
+                        self.queue.push_back(Token {name: TokenName::String, lexeme: string, pos: Pos::new(start, self.end(last_column))});
+                        continue;
+                    }
+                }
+                mut c => {
+                    if let Some((_, ref mut string)) = self.string {
+                        if c == '\\' {
+                            if let Some((_, (_, next))) = iter.next() {
+                                c = next;
+                            }
+                        }
+                        string.push(c);
+                        continue;
+                    }
+                }
+            }
             let next = match c {
                 // もし State::Initial のときに c が現れたら
                 // State は何になるか？
                 'A'..='Z' | 'a'..='z' | '_' => State::Identifier { dollar: false },
                 '$' => State::Identifier { dollar: true },
                 '0'..='9' => State::Number { decimal: false },
+                '"' => {
+                    self.string = Some((self.end(column), String::new()));
+                    continue;
+                }
                 c if c.is_ascii_whitespace() => State::Initial,
                 _ => State::Operator(match c {
                     '+' => Operator::Plus,

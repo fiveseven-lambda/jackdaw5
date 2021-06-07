@@ -7,6 +7,7 @@ pub enum Value {
     Real(f64),
     Bool(bool),
     Sound(Sound),
+    String(String),
     Function(Rc<dyn Function>),
     RealFunction(Rc<dyn RealFunction>),
 }
@@ -16,6 +17,7 @@ impl std::fmt::Debug for Value {
         match self {
             Value::Real(value) => write!(f, "{}", value),
             Value::Bool(value) => write!(f, "{}", value),
+            Value::String(value) => write!(f, "{}", value),
             Value::Sound(value) => write!(f, "{:?}", value),
             Value::Function(_) => write!(f, "function"),
             Value::RealFunction(_) => write!(f, "real function"),
@@ -29,6 +31,7 @@ pub enum Argument<'cell> {
     Real(&'cell Cell<f64>),
     Bool(&'cell Cell<bool>),
     Sound(&'cell Cell<Sound>),
+    String(&'cell Cell<String>),
 }
 
 pub trait Function {

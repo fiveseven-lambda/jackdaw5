@@ -10,16 +10,9 @@ type Result<T> = std::result::Result<(T, Option<Token>), Box<dyn std::error::Err
 
 fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
     let (mut pos, mut node) = match lexer.next()? {
-        Some(Token {
-            name: TokenName::Identifier { dollar },
-            lexeme,
-            pos,
-        }) => (pos, Node::Identifier(lexeme, dollar)),
-        Some(Token {
-            name: TokenName::Number,
-            lexeme,
-            pos,
-        }) => (pos, Node::Number(lexeme)),
+        Some(Token { name: TokenName::Identifier { dollar }, lexeme, pos, }) => (pos, Node::Identifier(lexeme, dollar)),
+        Some(Token { name: TokenName::Number, lexeme, pos, }) => (pos, Node::Number(lexeme)),
+        Some(Token { name: TokenName::String, lexeme, pos, }) => (pos, Node::String(lexeme)),
         // 前置の単項演算子
         // 優先順位は関数呼び出しよりも低い
         Some(Token {
