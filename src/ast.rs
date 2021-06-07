@@ -36,6 +36,7 @@ pub enum BinaryOperator {
     Sub,
     Mul,
     Div,
+    Pow,
     Less,
     Greater,
     LeftShift,
@@ -59,11 +60,20 @@ impl Expression {
     pub fn pos(&self) -> Option<Pos> {
         self.0.as_ref().map(|PosNode { pos, .. }| pos.clone())
     }
+    pub fn try_into_identifier(self) -> Option<(String, bool)> {
+        match self.0 {
+            Some(PosNode {
+                node: Node::Identifier(identifier, dollar),
+                ..
+            }) => Some((identifier, dollar)),
+            _ => None,
+        }
+    }
 }
 
 use crate::error::Error;
 use crate::sound::Sound;
-use crate::value::Value;
+use crate::value::{Value, ValueCell};
 
 use std::collections::HashMap;
 
@@ -93,7 +103,7 @@ impl PosNode {
                     (UnaryOperator::Minus, Value::Real(value)) => Ok(Value::Real(-value)),
                     (UnaryOperator::Reciprocal, Value::Real(value)) => Ok(Value::Real(1. / value)),
                     (UnaryOperator::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
-                    (_, value) => Err(Error::TypeMismatchUnary(value.typename(), self.pos.clone())),
+                    (_, value) => Err(Error::TypeMismatch(self.pos.clone())),
                 }
             }
             Node::Binary(operator, left, right) => {
@@ -104,6 +114,7 @@ impl PosNode {
                     (BinaryOperator::Sub, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left - right)),
                     (BinaryOperator::Mul, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left * right)),
                     (BinaryOperator::Div, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left / right)),
+                    (BinaryOperator::Pow, Value::Real(left), Value::Real(right)) => return Ok(Value::Real(left.powf(right))),
                     (BinaryOperator::Less, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool(left < right)),
                     (BinaryOperator::Greater, Value::Real(left), Value::Real(right)) => return Ok(Value::Bool(left > right)),
                     (BinaryOperator::LeftShift, Value::Sound(left), Value::Real(right)) => return Ok(Value::Sound(left.shift(-right))),
@@ -115,7 +126,7 @@ impl PosNode {
                     (_, Value::Real(left), Value::Sound(right)) => (Sound::Const(left), right),
                     (_, Value::Sound(left), Value::Real(right)) => (left, Sound::Const(right)),
                     (_, Value::Sound(left), Value::Sound(right)) => (left, right),
-                    (_, left, right) => return Err(Error::TypeMismatchBinary(left.typename(), right.typename(), self.pos.clone())),
+                    (_, left, right) => return Err(Error::TypeMismatch(self.pos.clone())),
                 };
                 let left = left.into();
                 let right = right.into();
@@ -127,29 +138,56 @@ impl PosNode {
                     _ => panic!(),
                 }
             }
-            Node::Invocation(function, arguments) => {
-                let function = function.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))??;
-                let arguments = arguments
-                    .iter()
-                    .filter_map(|expression| expression.0.as_ref().map(|expression| expression.evaluate(variables)))
-                    .collect::<Result<_, _>>()?;
-                match function {
-                    Value::Fnc(function) => match function(arguments) {
-                        Some(result) => Ok(result),
-                        None => Err(Error::InvocationFailed(self.pos.clone())),
-                    },
-                    Value::Fnc0(function) => Ok(Value::Real(function())),
-                    Value::Fnc1(function) => match &arguments[..] {
-                        [Value::Real(x)] => Ok(Value::Real(function(*x))),
+            Node::Invocation(function, arguments) => match function.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))?? {
+                Value::Function(function) => {
+                    let arguments: Vec<_> = arguments
+                        .iter()
+                        .filter_map(|expression| expression.0.as_ref().map(|expression| expression.evaluate(variables)))
+                        .collect::<Result<_, _>>()?;
+                    let cells = function.arguments();
+                    if cells.len() != arguments.len() {
+                        panic!();
+                    }
+                    cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
+                        (ValueCell::Real(cell), Value::Real(value)) => {
+                            cell.replace(value);
+                        }
+                        (ValueCell::Bool(cell), Value::Bool(value)) => {
+                            cell.replace(value);
+                        }
+                        (ValueCell::Sound(cell), Value::Sound(value)) => {
+                            cell.replace(value);
+                        }
                         _ => panic!(),
-                    },
-                    Value::Fnc2(function) => match &arguments[..] {
-                        [Value::Real(x), Value::Real(y)] => Ok(Value::Real(function(*x, *y))),
-                        _ => panic!(),
-                    },
-                    _ => Err(Error::NotAFunction(self.pos.clone())),
+                    });
+                    Ok(function.invoke())
                 }
-            }
+                Value::RealFunction(function) => {
+                    // todo: RealFunction には Sound も渡せるようにする
+                    let arguments: Vec<_> = arguments
+                        .iter()
+                        .filter_map(|expression| expression.0.as_ref().map(|expression| expression.evaluate(variables)))
+                        .collect::<Result<_, _>>()?;
+                    let cells = function.arguments();
+                    if cells.len() != arguments.len() {
+                        panic!();
+                    }
+                    cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
+                        (ValueCell::Real(cell), Value::Real(value)) => {
+                            cell.replace(value);
+                        }
+                        (ValueCell::Bool(cell), Value::Bool(value)) => {
+                            cell.replace(value);
+                        }
+                        (ValueCell::Sound(cell), Value::Sound(value)) => {
+                            cell.replace(value);
+                        }
+                        _ => panic!(),
+                    });
+                    Ok(Value::Real(function.invoke()))
+                }
+                _ => Err(Error::NotAFunction(self.pos.clone())),
+            },
             Node::Group(Bracket::Round, expression) => expression.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))?,
             Node::Group(_, expression) => todo!(),
         }

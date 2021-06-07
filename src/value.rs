@@ -1,45 +1,71 @@
-use crate::error::Error;
 use crate::sound::Sound;
 
-#[derive(Clone, Debug)]
-// Clone は，変数の値を map から get して使う際に必要（多分）
+use std::rc::Rc;
+
+#[derive(Clone)]
 pub enum Value {
     Real(f64),
     Bool(bool),
     Sound(Sound),
-    Fnc0(fn() -> f64),
-    Fnc1(fn(f64) -> f64),
-    Fnc2(fn(f64, f64) -> f64),
-    Fnc(fn(Vec<Value>) -> Option<Value>),
+    Function(Rc<dyn Function>),
+    RealFunction(Rc<dyn RealFunction>),
 }
 
-// Value 同士の計算
-// （演算子による足し算とか）は Value をムーブしていい
-
-impl Value {
-    pub fn typename(&self) -> &'static str {
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Value::Real(_) => "real",
-            Value::Bool(_) => "bool",
-            Value::Sound(_) => "Sound",
-            Value::Fnc0(_) => "real()",
-            Value::Fnc1(_) => "real(real)",
-            Value::Fnc2(_) => "real(real, real)",
-            Value::Fnc(_) => "function",
+            Value::Real(value) => write!(f, "{}", value),
+            Value::Bool(value) => write!(f, "{}", value),
+            Value::Sound(value) => write!(f, "{:?}", value),
+            Value::Function(_) => write!(f, "function"),
+            Value::RealFunction(_) => write!(f, "real function"),
         }
     }
 }
 
-pub fn sin(arguments: Vec<Value>) -> Option<Value> {
-    match &arguments[..] {
-        [Value::Real(frequency)] => Some(Value::Sound(Sound::Sin {
-            frequency: *frequency,
-            phase: 0.,
-        })),
-        [Value::Real(frequency), Value::Real(phase)] => Some(Value::Sound(Sound::Sin {
-            frequency: *frequency,
-            phase: *phase,
-        })),
-        _ => None,
+use std::cell::Cell;
+
+pub enum ValueCell<'cell> {
+    Real(&'cell Cell<f64>),
+    Bool(&'cell Cell<bool>),
+    Sound(&'cell Cell<Sound>),
+}
+
+pub trait Function {
+    fn arguments(&self) -> Vec<ValueCell>;
+    fn invoke(&self) -> Value;
+}
+pub trait RealFunction {
+    fn arguments(&self) -> Vec<ValueCell>;
+    fn invoke(&self) -> f64;
+}
+
+pub struct PrimitiveRealFunction1(fn(f64) -> f64, Cell<f64>);
+impl PrimitiveRealFunction1 {
+    pub fn new(fnc: fn(f64) -> f64) -> PrimitiveRealFunction1 {
+        PrimitiveRealFunction1(fnc, Cell::new(0.))
+    }
+}
+impl RealFunction for PrimitiveRealFunction1 {
+    fn arguments(&self) -> Vec<ValueCell> {
+        vec![ValueCell::Real(&self.1)]
+    }
+    fn invoke(&self) -> f64 {
+        self.0(self.1.get())
+    }
+}
+
+pub struct PrimitiveRealFunction2(fn(f64, f64) -> f64, Cell<f64>, Cell<f64>);
+impl PrimitiveRealFunction2 {
+    pub fn new(fnc: fn(f64, f64) -> f64) -> PrimitiveRealFunction2 {
+        PrimitiveRealFunction2(fnc, Cell::new(0.), Cell::new(0.))
+    }
+}
+impl RealFunction for PrimitiveRealFunction2 {
+    fn arguments(&self) -> Vec<ValueCell> {
+        vec![ValueCell::Real(&self.1), ValueCell::Real(&self.2)]
+    }
+    fn invoke(&self) -> f64 {
+        self.0(self.1.get(), self.2.get())
     }
 }

@@ -136,12 +136,13 @@ macro_rules! def_binary_operator {
     }
 }
 
-def_binary_operator!(parse_factor => parse_operator1: Operator::Asterisk => BinaryOperator::Mul, Operator::Slash => BinaryOperator::Div);
-def_binary_operator!(parse_operator1 => parse_operator2: Operator::Plus => BinaryOperator::Add, Operator::Minus => BinaryOperator::Sub);
-def_binary_operator!(parse_operator2 => parse_operator3: Operator::DoubleLess => BinaryOperator::LeftShift, Operator::DoubleGreater => BinaryOperator::RightShift);
-def_binary_operator!(parse_operator3 => parse_operator4: Operator::Less => BinaryOperator::Less, Operator::Greater => BinaryOperator::Greater);
-def_binary_operator!(parse_operator4 => parse_operator5: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
-def_binary_operator!(parse_operator5 => parse_operator: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
+def_binary_operator!(parse_factor => parse_operator1: Operator::Circumflex => BinaryOperator::Pow);
+def_binary_operator!(parse_operator1 => parse_operator2: Operator::Asterisk => BinaryOperator::Mul, Operator::Slash => BinaryOperator::Div);
+def_binary_operator!(parse_operator2 => parse_operator3: Operator::Plus => BinaryOperator::Add, Operator::Minus => BinaryOperator::Sub);
+def_binary_operator!(parse_operator3 => parse_operator4: Operator::DoubleLess => BinaryOperator::LeftShift, Operator::DoubleGreater => BinaryOperator::RightShift);
+def_binary_operator!(parse_operator4 => parse_operator5: Operator::Less => BinaryOperator::Less, Operator::Greater => BinaryOperator::Greater);
+def_binary_operator!(parse_operator5 => parse_operator6: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
+def_binary_operator!(parse_operator6 => parse_operator: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
 
 fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();

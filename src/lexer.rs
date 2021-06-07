@@ -104,6 +104,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     '+' => Operator::Plus,
                     '-' => Operator::Minus,
                     '*' => Operator::Asterisk,
+                    '^' => Operator::Circumflex,
                     '/' => Operator::Slash,
                     '=' => Operator::Equal,
                     '!' => Operator::Exclamation,

@@ -16,26 +16,27 @@ pub enum TokenName {
 
 #[derive(Debug)]
 pub enum Operator {
-    Plus,
-    Minus,
-    Asterisk,
-    Slash,
-    Equal,
-    DoubleEqual,
-    Exclamation,
-    ExclamationEqual,
-    Less,
-    DoubleLess,
-    Greater,
-    DoubleGreater,
-    Ampersand,
-    DoubleAmpersand,
-    Bar,
-    DoubleBar,
-    Colon,
-    Semicolon,
-    Comma,
-    Dot,
+    Plus,             // +
+    Minus,            // -
+    Asterisk,         // *
+    Slash,            // /
+    Circumflex,       // ^
+    Equal,            // =
+    DoubleEqual,      // ==
+    Exclamation,      // !
+    ExclamationEqual, // !=
+    Less,             // <
+    DoubleLess,       // <<
+    Greater,          // >
+    DoubleGreater,    // >>
+    Ampersand,        // &
+    DoubleAmpersand,  // &&
+    Bar,              // |
+    DoubleBar,        // ||
+    Colon,            // :
+    Semicolon,        // ;
+    Comma,            // ,
+    Dot,              // .
     Open(Bracket),
     Close(Bracket),
 }
