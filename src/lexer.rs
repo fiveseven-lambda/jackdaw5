@@ -51,6 +51,9 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             Operator(Operator),
         }
 
+        // 2.3.5 を 2.3 と .5 に分けてパースして嬉しいことあるか？
+        // むしろそれを無くして， State を Option<TokenName> にしてしまった方が
+
         let mut prev = State::Initial;
         let mut prev_index = 0;
         let mut prev_column = 0;

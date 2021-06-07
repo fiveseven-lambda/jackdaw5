@@ -25,18 +25,18 @@ impl std::fmt::Debug for Value {
 
 use std::cell::Cell;
 
-pub enum ValueCell<'cell> {
+pub enum Argument<'cell> {
     Real(&'cell Cell<f64>),
     Bool(&'cell Cell<bool>),
     Sound(&'cell Cell<Sound>),
 }
 
 pub trait Function {
-    fn arguments(&self) -> Vec<ValueCell>;
+    fn arguments(&self) -> Vec<Argument>;
     fn invoke(&self) -> Value;
 }
 pub trait RealFunction {
-    fn arguments(&self) -> Vec<ValueCell>;
+    fn arguments(&self) -> Vec<Argument>;
     fn invoke(&self) -> f64;
 }
 
@@ -47,8 +47,8 @@ impl PrimitiveRealFunction1 {
     }
 }
 impl RealFunction for PrimitiveRealFunction1 {
-    fn arguments(&self) -> Vec<ValueCell> {
-        vec![ValueCell::Real(&self.1)]
+    fn arguments(&self) -> Vec<Argument> {
+        vec![Argument::Real(&self.1)]
     }
     fn invoke(&self) -> f64 {
         self.0(self.1.get())
@@ -62,8 +62,8 @@ impl PrimitiveRealFunction2 {
     }
 }
 impl RealFunction for PrimitiveRealFunction2 {
-    fn arguments(&self) -> Vec<ValueCell> {
-        vec![ValueCell::Real(&self.1), ValueCell::Real(&self.2)]
+    fn arguments(&self) -> Vec<Argument> {
+        vec![Argument::Real(&self.1), Argument::Real(&self.2)]
     }
     fn invoke(&self) -> f64 {
         self.0(self.1.get(), self.2.get())

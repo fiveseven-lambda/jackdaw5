@@ -1,4 +1,5 @@
 use crate::pos::{End, Pos};
+use crate::value::Value;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -18,16 +19,12 @@ pub enum Error {
     FloatParseError(String, Pos, <f64 as std::str::FromStr>::Err),
     #[error("empty expression at {0}")]
     EmptyExpression(Pos),
-    #[error("type mismatch at {0}")]
-    TypeMismatch(Pos),
-    #[error("type mismatch, found {0}, at {1}")]
-    TypeMismatchUnary(&'static str, Pos),
-    #[error("type mismatch, left: {0} right: {1}, at {2}")]
-    TypeMismatchBinary(&'static str, &'static str, Pos),
+    #[error("type mismatch (operand is {0:?}) at {1}")]
+    TypeMismatchUnary(Value, Pos),
+    #[error("type mismatch (operands are {0:?} and {1:?}) at {2}")]
+    TypeMismatchBinary(Value, Value, Pos),
     #[error("not a function (at {0})")]
     NotAFunction(Pos),
-    #[error("invocation failed at {0}")]
-    InvocationFailed(Pos),
     #[error("undefined variable `{0}` at {1}")]
     UndefinedVariable(String, Pos),
 }

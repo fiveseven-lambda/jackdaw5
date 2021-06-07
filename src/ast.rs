@@ -73,7 +73,7 @@ impl Expression {
 
 use crate::error::Error;
 use crate::sound::Sound;
-use crate::value::{Value, ValueCell};
+use crate::value::{Value, Argument};
 
 use std::collections::HashMap;
 
@@ -103,7 +103,7 @@ impl PosNode {
                     (UnaryOperator::Minus, Value::Real(value)) => Ok(Value::Real(-value)),
                     (UnaryOperator::Reciprocal, Value::Real(value)) => Ok(Value::Real(1. / value)),
                     (UnaryOperator::Not, Value::Bool(value)) => Ok(Value::Bool(!value)),
-                    (_, value) => Err(Error::TypeMismatch(self.pos.clone())),
+                    (_, value) => Err(Error::TypeMismatchUnary(value, self.pos.clone())),
                 }
             }
             Node::Binary(operator, left, right) => {
@@ -126,7 +126,7 @@ impl PosNode {
                     (_, Value::Real(left), Value::Sound(right)) => (Sound::Const(left), right),
                     (_, Value::Sound(left), Value::Real(right)) => (left, Sound::Const(right)),
                     (_, Value::Sound(left), Value::Sound(right)) => (left, right),
-                    (_, left, right) => return Err(Error::TypeMismatch(self.pos.clone())),
+                    (_, left, right) => return Err(Error::TypeMismatchBinary(left, right, self.pos.clone())),
                 };
                 let left = left.into();
                 let right = right.into();
@@ -149,13 +149,13 @@ impl PosNode {
                         panic!();
                     }
                     cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
-                        (ValueCell::Real(cell), Value::Real(value)) => {
+                        (Argument::Real(cell), Value::Real(value)) => {
                             cell.replace(value);
                         }
-                        (ValueCell::Bool(cell), Value::Bool(value)) => {
+                        (Argument::Bool(cell), Value::Bool(value)) => {
                             cell.replace(value);
                         }
-                        (ValueCell::Sound(cell), Value::Sound(value)) => {
+                        (Argument::Sound(cell), Value::Sound(value)) => {
                             cell.replace(value);
                         }
                         _ => panic!(),
@@ -173,13 +173,13 @@ impl PosNode {
                         panic!();
                     }
                     cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
-                        (ValueCell::Real(cell), Value::Real(value)) => {
+                        (Argument::Real(cell), Value::Real(value)) => {
                             cell.replace(value);
                         }
-                        (ValueCell::Bool(cell), Value::Bool(value)) => {
+                        (Argument::Bool(cell), Value::Bool(value)) => {
                             cell.replace(value);
                         }
-                        (ValueCell::Sound(cell), Value::Sound(value)) => {
+                        (Argument::Sound(cell), Value::Sound(value)) => {
                             cell.replace(value);
                         }
                         _ => panic!(),
@@ -189,7 +189,7 @@ impl PosNode {
                 _ => Err(Error::NotAFunction(self.pos.clone())),
             },
             Node::Group(Bracket::Round, expression) => expression.evaluate(variables).ok_or(Error::EmptyExpression(self.pos.clone()))?,
-            Node::Group(_, expression) => todo!(),
+            Node::Group(_, _) => todo!(),
         }
     }
 }
