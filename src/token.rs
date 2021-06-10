@@ -10,13 +10,8 @@ pub struct Token {
 #[derive(Debug)]
 pub enum TokenName {
     Identifier { dollar: bool },
-    Number,
+    Number{ scientific: bool },
     String,
-    Operator(Operator),
-}
-
-#[derive(Debug)]
-pub enum Operator {
     Plus,             // +
     Minus,            // -
     Asterisk,         // *
@@ -38,13 +33,10 @@ pub enum Operator {
     Semicolon,        // ;
     Comma,            // ,
     Dot,              // .
-    Open(Bracket),
-    Close(Bracket),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Bracket {
-    Round,
-    Curly,
-    Square,
+    OpeningParen,     // (
+    ClosingParen,     // )
+    OpeningBracket,   // [
+    ClosingBracket,   // ]
+    OpeningBrace,     // {
+    ClosingBrace,     // }
 }

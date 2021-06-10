@@ -74,7 +74,7 @@ impl Expression {
 
 use crate::error::Error;
 use crate::sound::Sound;
-use crate::value::{Value, Argument};
+use crate::value::{Argument, Value};
 
 use std::collections::HashMap;
 

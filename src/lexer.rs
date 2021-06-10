@@ -1,16 +1,15 @@
-use crate::token::{Bracket, Operator, Token, TokenName};
+use crate::token::{Token, TokenName};
 use std::collections::VecDeque;
 
 use crate::error::Error;
-use crate::pos::{End, Pos};
+use crate::pos::{CharPos, Pos};
 
 pub struct Lexer<BufRead> {
     reader: BufRead,
     prompt: bool,
     queue: VecDeque<Token>,
-    line: usize,       // 今何行目か
-    comment: Vec<End>, // コメントの開始点
-    string: Option<(End, String)>, // 文字列リテラル
+    line: usize,                       // 今何行目か
+    comment: Vec<CharPos>,             // コメントの開始点
 }
 
 impl<BufRead: std::io::BufRead> Lexer<BufRead> {
@@ -21,11 +20,10 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
             queue: VecDeque::new(),
             line: 0,
             comment: Vec::new(),
-            string: None,
         }
     }
-    fn end(&self, column: usize) -> End {
-        End::new(self.line, column + 1)
+    fn char_pos(&self, column: usize) -> CharPos {
+        CharPos::new(self.line, column + 1)
     }
     fn read_line(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
         if self.prompt {
@@ -37,7 +35,6 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         }
         let mut s = String::new();
         if self.reader.read_line(&mut s)? == 0 {
-            // end of file
             return match self.comment.pop() {
                 Some(start) => Err(Error::UnterminatedComment(start).into()), // コメントのまま終了した
                 None => Ok(false),
@@ -46,34 +43,11 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
 
         self.line += 1;
 
-        enum State {
-            Initial,
-            Identifier { dollar: bool },
-            Number { decimal: bool },
-            Operator(Operator),
-        }
+        let mut prev: Option<TokenName> = None;
 
-        // 2.3.5 を 2.3 と .5 に分けてパースして嬉しいことあるか？
-        // むしろそれを無くして， State を Option<TokenName> にしてしまった方が
-
-        let mut prev = State::Initial;
-        let mut prev_index = 0;
+        let mut start_index = 0;
+        let mut start_column = 0;
         let mut prev_column = 0;
-        let mut last_column = 0;
-
-        // はじめ prev は State::Initial
-        // トークンが始まると prev は State::Initial 以外になり，
-        // prev_index にはそのときのバイト位置，
-        // prev_column には column （何文字目か）が入る
-        // トークンが終わるまで prev_index, prev_column は更新されないが
-        // last_column には column が代入され続ける
-        // トークンが終わり，次の文字が読まれた段階で
-        // バイト位置 prev_index..index がトークン
-        // prev_column が最初の文字の位置， last_column が最後の文字の位置
-
-        // prev が State::Initial のうちは prev_index, prev_column, last_column の値は意味をなさないので
-        // prev の代わりに Option<(State, usize, usize, usize)> を用いて
-        // State::Initial の代わりに None とする方が良いかもしれない
 
         let mut iter = s.char_indices().enumerate().peekable();
 
@@ -88,7 +62,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     match iter.peek() {
                         Some((_, (_, '*'))) => {
                             iter.next(); // peek した '*' を読む
-                            self.comment.push(self.end(column)); // コメントの開始（ネスト）
+                            self.comment.push(self.char_pos(column)); // コメントの開始（ネスト）
                         }
                         Some((_, (_, '/'))) => {
                             return Ok(true); // ラインコメント
@@ -98,111 +72,68 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 }
                 continue;
             }
-            match c {
-                '"' => {
-                    if let Some((start, string)) = self.string.take() {
-                        self.queue.push_back(Token {name: TokenName::String, lexeme: string, pos: Pos::new(start, self.end(last_column))});
-                        continue;
-                    }
-                }
-                mut c => {
-                    if let Some((_, ref mut string)) = self.string {
-                        if c == '\\' {
-                            if let Some((_, (_, next))) = iter.next() {
-                                c = next;
-                            }
-                        }
-                        string.push(c);
-                        continue;
-                    }
-                }
-            }
             let next = match c {
-                // もし State::Initial のときに c が現れたら
-                // State は何になるか？
-                'A'..='Z' | 'a'..='z' | '_' => State::Identifier { dollar: false },
-                '$' => State::Identifier { dollar: true },
-                '0'..='9' => State::Number { decimal: false },
-                '"' => {
-                    self.string = Some((self.end(column), String::new()));
-                    continue;
-                }
-                c if c.is_ascii_whitespace() => State::Initial,
-                _ => State::Operator(match c {
-                    '+' => Operator::Plus,
-                    '-' => Operator::Minus,
-                    '*' => Operator::Asterisk,
-                    '^' => Operator::Circumflex,
-                    '/' => Operator::Slash,
-                    '=' => Operator::Equal,
-                    '!' => Operator::Exclamation,
-                    '<' => Operator::Less,
-                    '>' => Operator::Greater,
-                    '&' => Operator::Ampersand,
-                    '|' => Operator::Bar,
-                    ':' => Operator::Colon,
-                    ';' => Operator::Semicolon,
-                    ',' => Operator::Comma,
-                    '.' => Operator::Dot,
-                    '(' => Operator::Open(Bracket::Round),
-                    ')' => Operator::Close(Bracket::Round),
-                    '{' => Operator::Open(Bracket::Curly),
-                    '}' => Operator::Close(Bracket::Curly),
-                    '[' => Operator::Open(Bracket::Square),
-                    ']' => Operator::Close(Bracket::Square),
-                    _ => return Err(Error::UnexpectedCharacter(c, self.end(column)).into()),
-                }),
+                'A'..='Z' | 'a'..='z' | '_' => Some(TokenName::Identifier { dollar: false }),
+                '$' => Some(TokenName::Identifier { dollar: true }),
+                '0'..='9' => Some(TokenName::Number{scientific: false}),
+                c if c.is_ascii_whitespace() => None,
+                '+' => Some(TokenName::Plus),
+                '-' => Some(TokenName::Minus),
+                '*' => Some(TokenName::Asterisk),
+                '^' => Some(TokenName::Circumflex),
+                '/' => Some(TokenName::Slash),
+                '=' => Some(TokenName::Equal),
+                '!' => Some(TokenName::Exclamation),
+                '<' => Some(TokenName::Less),
+                '>' => Some(TokenName::Greater),
+                '&' => Some(TokenName::Ampersand),
+                '|' => Some(TokenName::Bar),
+                ':' => Some(TokenName::Colon),
+                ';' => Some(TokenName::Semicolon),
+                ',' => Some(TokenName::Comma),
+                '.' => Some(TokenName::Dot),
+                '(' => Some(TokenName::OpeningParen),
+                ')' => Some(TokenName::ClosingParen),
+                '{' => Some(TokenName::OpeningBrace),
+                '}' => Some(TokenName::ClosingBrace),
+                '[' => Some(TokenName::OpeningBracket),
+                ']' => Some(TokenName::ClosingBracket),
+                _ => return Err(Error::UnexpectedCharacter(c, self.char_pos(column)).into()),
             };
             prev = match (prev, next) {
-                (State::Identifier { dollar }, State::Identifier { .. } | State::Number { .. }) => State::Identifier { dollar },
-                (State::Number { decimal }, State::Number { .. }) => State::Number { decimal }, // 数値リテラルに続く数字
-                (State::Number { decimal: false }, State::Operator(Operator::Dot)) => State::Number { decimal: true }, // 数値リテラル中に現れる小数点
-                (State::Operator(Operator::Dot), State::Number { .. }) => State::Number { decimal: true }, // 小数点から始まる数値リテラル
-                (State::Operator(Operator::Slash), State::Operator(Operator::Slash)) => return Ok(true), // ラインコメント
-                (State::Operator(Operator::Slash), State::Operator(Operator::Asterisk)) => {
-                    self.comment.push(self.end(prev_column)); // ブロックコメントの開始
-                    prev = State::Initial;
+                (Some(TokenName::Identifier { dollar }), Some(TokenName::Identifier { .. } | TokenName::Number{..})) => Some(TokenName::Identifier { dollar }),
+                (Some(TokenName::Number{scientific: true}), Some(TokenName::Number{..})) => Some(TokenName::Number{scientific: true}),
+                (Some(TokenName::Number{scientific: true}), Some(TokenName::Plus)) => Some(TokenName::Number{scientific: true}),
+                (Some(TokenName::Dot), Some(TokenName::Number)) => Some(TokenName::Number),
+                (Some(TokenName::Slash), Some(TokenName::Slash)) => return Ok(true),
+                (Some(TokenName::Slash), Some(TokenName::Asterisk)) => {
+                    self.comment.push(self.char_pos(prev_column));
+                    prev = None;
                     continue;
                 }
-                // 2 文字でできた演算子
-                (State::Operator(Operator::Exclamation), State::Operator(Operator::Equal)) => State::Operator(Operator::ExclamationEqual),
-                (State::Operator(Operator::Equal), State::Operator(Operator::Equal)) => State::Operator(Operator::DoubleEqual),
-                (State::Operator(Operator::Ampersand), State::Operator(Operator::Ampersand)) => State::Operator(Operator::DoubleAmpersand),
-                (State::Operator(Operator::Bar), State::Operator(Operator::Bar)) => State::Operator(Operator::DoubleBar),
-                (State::Operator(Operator::Less), State::Operator(Operator::Less)) => State::Operator(Operator::DoubleLess),
-                (State::Operator(Operator::Greater), State::Operator(Operator::Greater)) => State::Operator(Operator::DoubleGreater),
+                (Some(TokenName::Exclamation), Some(TokenName::Equal)) => Some(TokenName::ExclamationEqual),
+                (Some(TokenName::Equal), Some(TokenName::Equal)) => Some(TokenName::DoubleEqual),
+                (Some(TokenName::Ampersand), Some(TokenName::Ampersand)) => Some(TokenName::DoubleAmpersand),
+                (Some(TokenName::Bar), Some(TokenName::Bar)) => Some(TokenName::DoubleBar),
+                (Some(TokenName::Less), Some(TokenName::Less)) => Some(TokenName::DoubleLess),
+                (Some(TokenName::Greater), Some(TokenName::Greater)) => Some(TokenName::DoubleGreater),
                 (prev, next) => {
-                    'push: loop {
-                        // labeled-block が安定化されたら書き直す
-                        break self.queue.push_back(Token {
-                            name: match prev {
-                                State::Initial => break 'push,
-                                State::Identifier { dollar } => TokenName::Identifier { dollar },
-                                State::Operator(operator) => TokenName::Operator(operator),
-                                State::Number { .. } => TokenName::Number,
-                            },
-                            lexeme: s[prev_index..index].to_string(),
-                            pos: Pos::new(self.end(prev_column), self.end(last_column)),
+                    // トークンの終了
+                    if let Some(name) = prev {
+                        self.queue.push_back(Token {
+                            name,
+                            lexeme: s[start_index..index].to_string(),
+                            pos: Pos::new(self.char_pos(start_column), self.char_pos(prev_column)),
                         });
                     }
-                    prev_index = index;
-                    prev_column = column;
+                    // 新しいトークンの開始
+                    start_index = index;
+                    start_column = column;
                     next
                 }
             };
-            last_column = column;
+            prev_column = column;
         }
-        // 最後に何か残っていたとき
-        self.queue.push_back(Token {
-            name: match prev {
-                State::Initial => return Ok(true),
-                State::Identifier { dollar } => TokenName::Identifier { dollar },
-                State::Operator(operator) => TokenName::Operator(operator),
-                State::Number { .. } => TokenName::Number,
-            },
-            lexeme: s[prev_index..].to_string(),
-            pos: Pos::new(self.end(prev_column), self.end(last_column)),
-        });
 
         Ok(true)
     }
