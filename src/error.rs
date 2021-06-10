@@ -8,10 +8,10 @@ pub enum Error {
     UnexpectedCharacterAfterE(char, char, CharPos),
     #[error("unexpected end of line after `{0}` for scientific notation at {1}")]
     UnexpectedEndOfLineAfterE(char, CharPos),
+    #[error("token `{0}` at end of line")]
+    TokenAtEndOfLine(String),
     #[error("unterminated comment (started at {0})")]
     UnterminatedComment(CharPos),
-    #[error("unterminated string literal (started at {0})")]
-    UnterminatedStringLiteral(CharPos),
     #[error("brace `{0}` opened at {1}, but unclosed until `{2}` at {3}")]
     UnclosedBraceUntil(String, Pos, String, Pos),
     #[error("brace `{0}` opened at {1}, but unclosed until end of file")]

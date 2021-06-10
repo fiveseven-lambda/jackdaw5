@@ -54,7 +54,7 @@ impl Display for Pos {
 }
 impl Debug for Pos {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "[{}, {})", self.start, self.end)
+        write!(f, "[{:?}, {:?})", self.start, self.end)
     }
 }
 

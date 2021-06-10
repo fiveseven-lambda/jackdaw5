@@ -1,7 +1,7 @@
 use crate::ast::{BinaryOperator, Expression, Node, UnaryOperator};
 use crate::error::Error;
 use crate::lexer::Lexer;
-use crate::token::{Bracket, Operator, Token, TokenName};
+use crate::token::{Token, TokenName};
 
 use std::io::BufRead;
 
@@ -19,16 +19,37 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             name: TokenName::Number,
             lexeme,
             pos,
-        }) => (pos, Node::Number(lexeme)),
+        }) => match lexeme.parse() {
+            Ok(value) => (pos, Node::Number(value)),
+            Err(err) => return Err(Error::FloatParseError(lexeme, pos, err).into()),
+        },
         Some(Token {
             name: TokenName::String,
             lexeme,
             pos,
-        }) => (pos, Node::String(lexeme)),
+        }) => {
+            let mut iter = lexeme.chars().skip(1);
+            let mut s = String::new();
+            while let Some(c) = iter.next() {
+                s.push(match c {
+                    '\\' => match iter.next() {
+                        Some('n') => '\n',
+                        Some('r') => '\r',
+                        Some('t') => '\t',
+                        Some('0') => '\0',
+                        Some(c) => c,
+                        None => break,
+                    },
+                    '"' => break,
+                    c => c,
+                });
+            }
+            (pos, Node::String(s))
+        }
         // 前置の単項演算子
         // 優先順位は関数呼び出しよりも低い
         Some(Token {
-            name: TokenName::Operator(operator @ (Operator::Plus | Operator::Minus | Operator::Asterisk | Operator::Slash | Operator::Exclamation)),
+            name: name @ (TokenName::Plus | TokenName::Minus | TokenName::Asterisk | TokenName::Slash | TokenName::Exclamation),
             pos: pos_operator,
             ..
         }) => {
@@ -37,10 +58,10 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                     Expression::new(
                         pos_operator + expr.pos(),
                         Node::Unary(
-                            match operator {
-                                Operator::Minus => UnaryOperator::Minus,
-                                Operator::Slash => UnaryOperator::Reciprocal,
-                                Operator::Exclamation => UnaryOperator::Not,
+                            match name {
+                                TokenName::Minus => UnaryOperator::Minus,
+                                TokenName::Slash => UnaryOperator::Reciprocal,
+                                TokenName::Exclamation => UnaryOperator::Not,
                                 _ => UnaryOperator::Nop,
                             },
                             expr.into(),
@@ -52,18 +73,18 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
         }
         // カッコでくくられた部分
         Some(Token {
-            name: TokenName::Operator(Operator::Open(open)),
+            name: TokenName::OpeningParen,
             lexeme: lexeme_open,
             pos: pos_open,
         }) => match parse_operator(lexer)? {
             (
                 expression,
                 Some(Token {
-                    name: TokenName::Operator(Operator::Close(close)),
+                    name: TokenName::ClosingParen,
                     pos: pos_close,
                     ..
                 }),
-            ) if open == close => (pos_open + pos_close, Node::Group(open, expression.into())),
+            ) => (pos_open + pos_close, Node::Group(expression.into())),
             (_, Some(Token { lexeme, pos, .. })) => return Err(Error::UnclosedBraceUntil(lexeme_open, pos_open, lexeme, pos).into()),
             (_, None) => return Err(Error::UnclosedBraceUntilEndOfFile(lexeme_open, pos_open).into()),
         },
@@ -74,14 +95,14 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
         match lexer.next()? {
             // 関数呼び出し
             Some(Token {
-                name: TokenName::Operator(Operator::Open(Bracket::Round)),
+                name: TokenName::OpeningParen,
                 lexeme: lexeme_open,
                 pos: pos_open,
             }) => match parse_list(lexer)? {
                 (
                     arg, // 引数
                     Some(Token {
-                        name: TokenName::Operator(Operator::Close(Bracket::Round)),
+                        name: TokenName::ClosingParen,
                         pos: pos_close,
                         ..
                     }),
@@ -93,10 +114,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                 (_, None) => return Err(Error::UnclosedBraceUntilEndOfFile(lexeme_open, pos_open).into()),
             },
             // メンバアクセス
-            Some(Token {
-                name: TokenName::Operator(Operator::Dot),
-                ..
-            }) => match lexer.next()? {
+            Some(Token { name: TokenName::Dot, .. }) => match lexer.next()? {
                 Some(Token {
                     name: TokenName::Identifier { .. },
                     lexeme,
@@ -123,7 +141,7 @@ macro_rules! def_binary_operator {
                     $((
                         left,
                         Some(Token {
-                            name: TokenName::Operator($from),
+                            name: $from,
                             pos: pos_operator,
                             ..
                         })
@@ -141,13 +159,13 @@ macro_rules! def_binary_operator {
     }
 }
 
-def_binary_operator!(parse_factor => parse_operator1: Operator::Circumflex => BinaryOperator::Pow);
-def_binary_operator!(parse_operator1 => parse_operator2: Operator::Asterisk => BinaryOperator::Mul, Operator::Slash => BinaryOperator::Div);
-def_binary_operator!(parse_operator2 => parse_operator3: Operator::Plus => BinaryOperator::Add, Operator::Minus => BinaryOperator::Sub);
-def_binary_operator!(parse_operator3 => parse_operator4: Operator::DoubleLess => BinaryOperator::LeftShift, Operator::DoubleGreater => BinaryOperator::RightShift);
-def_binary_operator!(parse_operator4 => parse_operator5: Operator::Less => BinaryOperator::Less, Operator::Greater => BinaryOperator::Greater);
-def_binary_operator!(parse_operator5 => parse_operator6: Operator::DoubleEqual => BinaryOperator::Equal, Operator::ExclamationEqual => BinaryOperator::NotEqual);
-def_binary_operator!(parse_operator6 => parse_operator: Operator::DoubleAmpersand => BinaryOperator::And, Operator::DoubleBar => BinaryOperator::Or);
+def_binary_operator!(parse_factor => parse_operator1: TokenName::Circumflex => BinaryOperator::Pow);
+def_binary_operator!(parse_operator1 => parse_operator2: TokenName::Asterisk => BinaryOperator::Mul, TokenName::Slash => BinaryOperator::Div);
+def_binary_operator!(parse_operator2 => parse_operator3: TokenName::Plus => BinaryOperator::Add, TokenName::Minus => BinaryOperator::Sub);
+def_binary_operator!(parse_operator3 => parse_operator4: TokenName::DoubleLess => BinaryOperator::LeftShift, TokenName::DoubleGreater => BinaryOperator::RightShift);
+def_binary_operator!(parse_operator4 => parse_operator5: TokenName::Less => BinaryOperator::Less, TokenName::Greater => BinaryOperator::Greater);
+def_binary_operator!(parse_operator5 => parse_operator6: TokenName::DoubleEqual => BinaryOperator::Equal, TokenName::ExclamationEqual => BinaryOperator::NotEqual);
+def_binary_operator!(parse_operator6 => parse_operator: TokenName::DoubleAmpersand => BinaryOperator::And, TokenName::DoubleBar => BinaryOperator::Or);
 
 fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();
@@ -155,10 +173,7 @@ fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
         let (item, delimiter) = parse_operator(lexer)?;
         ret.push(item);
         match delimiter {
-            Some(Token {
-                name: TokenName::Operator(Operator::Comma),
-                ..
-            }) => {}
+            Some(Token { name: TokenName::Comma, .. }) => {}
             other => return Ok((ret, other)),
         }
     }
@@ -169,8 +184,7 @@ pub fn parse_expression(lexer: &mut Lexer<impl BufRead>) -> std::result::Result<
         (
             expression,
             Some(Token {
-                name: TokenName::Operator(Operator::Semicolon),
-                ..
+                name: TokenName::Semicolon, ..
             }),
         ) => Ok(Some(expression)),
         (_, Some(Token { lexeme, pos, .. })) => Err(Error::UnexpectedToken(lexeme, pos).into()),
