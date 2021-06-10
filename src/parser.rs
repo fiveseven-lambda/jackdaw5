@@ -133,7 +133,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
 
 // 二項演算子の定義
 macro_rules! def_binary_operator {
-    ($prev:ident => $next:ident: $($from:path => $to:expr),*) => {
+    ($prev:ident => $next:ident: $($from:path => $to:expr),* $(,)?) => {
         fn $next(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
             let mut ret = $prev(lexer)?;
             loop {
@@ -159,13 +159,40 @@ macro_rules! def_binary_operator {
     }
 }
 
-def_binary_operator!(parse_factor => parse_operator1: TokenName::Circumflex => BinaryOperator::Pow);
-def_binary_operator!(parse_operator1 => parse_operator2: TokenName::Asterisk => BinaryOperator::Mul, TokenName::Slash => BinaryOperator::Div);
-def_binary_operator!(parse_operator2 => parse_operator3: TokenName::Plus => BinaryOperator::Add, TokenName::Minus => BinaryOperator::Sub);
-def_binary_operator!(parse_operator3 => parse_operator4: TokenName::DoubleLess => BinaryOperator::LeftShift, TokenName::DoubleGreater => BinaryOperator::RightShift);
-def_binary_operator!(parse_operator4 => parse_operator5: TokenName::Less => BinaryOperator::Less, TokenName::Greater => BinaryOperator::Greater);
-def_binary_operator!(parse_operator5 => parse_operator6: TokenName::DoubleEqual => BinaryOperator::Equal, TokenName::ExclamationEqual => BinaryOperator::NotEqual);
-def_binary_operator!(parse_operator6 => parse_operator: TokenName::DoubleAmpersand => BinaryOperator::And, TokenName::DoubleBar => BinaryOperator::Or);
+def_binary_operator! {
+    parse_factor => parse_operator1:
+    TokenName::Circumflex => BinaryOperator::Pow,
+}
+def_binary_operator! {
+    parse_operator1 => parse_operator2:
+    TokenName::Asterisk => BinaryOperator::Mul,
+    TokenName::Slash => BinaryOperator::Div,
+}
+def_binary_operator! {
+    parse_operator2 => parse_operator3:
+    TokenName::Plus => BinaryOperator::Add,
+    TokenName::Minus => BinaryOperator::Sub,
+}
+def_binary_operator! {
+    parse_operator3 => parse_operator4:
+    TokenName::DoubleLess => BinaryOperator::LeftShift,
+    TokenName::DoubleGreater => BinaryOperator::RightShift,
+}
+def_binary_operator! {
+    parse_operator4 => parse_operator5:
+    TokenName::Less => BinaryOperator::Less,
+    TokenName::Greater => BinaryOperator::Greater
+}
+def_binary_operator! {
+    parse_operator5 => parse_operator6:
+    TokenName::DoubleEqual => BinaryOperator::Equal,
+    TokenName::ExclamationEqual => BinaryOperator::NotEqual
+}
+def_binary_operator! {
+    parse_operator6 => parse_operator:
+    TokenName::DoubleAmpersand => BinaryOperator::And,
+    TokenName::DoubleBar => BinaryOperator::Or
+}
 
 fn parse_args(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();
