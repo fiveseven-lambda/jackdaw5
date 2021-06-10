@@ -9,6 +9,7 @@
 
 ### impl Add
 A, B を式やトークンとし，位置がそれぞれ `a: Pos`，`b: Pos` として得られているとする．ソースコード内で A と B が並んでいるとき， `a + b` で AB を合わせた範囲が得られるようにする．このとき，片方が `Option<Pos>` でもかまわないものとする．
+
 注意： `a + b` と `b + a` は同じとは限らない．足し算は必ず「左のトークン」+「右のトークン」の順で行わねばならない．
 
 # mod error
@@ -19,7 +20,9 @@ A, B を式やトークンとし，位置がそれぞれ `a: Pos`，`b: Pos` と
 # mod token
 ## struct Token
 トークンの種類を表すメンバ `name: TokenName` 
+
 トークンに対応する，ソースコード中の文字列を表すメンバ `lexeme: String` 
+
 ソースコード中での `lexeme` の位置を表すメンバ `pos: Pos`
 ## enum TokenName
 ### Identifier
@@ -64,7 +67,9 @@ A, B を式やトークンとし，位置がそれぞれ `a: Pos`，`b: Pos` と
 
 #### 字句解析
 `prev: Option<TokenName>`
+
 `next: Option<TokenName>`
 
-`c` がトークンの一文字目のときのトークンの種類を， `next` に代入する． `c` が空白文字ならば `None` とする．
+`c` がトークンの一文字目のときのトークンの種類を， `next: Option<TokenName>` に代入する． `c` が空白文字ならば `None` とする．
 
+``

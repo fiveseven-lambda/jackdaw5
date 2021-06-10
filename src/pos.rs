@@ -42,7 +42,14 @@ impl Debug for CharPos {
 }
 impl Display for Pos {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}:{}-{}:{}", self.start.line + 1, self.start.column + 1, self.end.line + 1, self.end.column)
+        write!(
+            f,
+            "{}:{}-{}:{}",
+            self.start.line + 1,
+            self.start.column + 1,
+            self.end.line + 1,
+            self.end.column
+        )
     }
 }
 impl Debug for Pos {

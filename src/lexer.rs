@@ -8,8 +8,8 @@ pub struct Lexer<BufRead> {
     reader: BufRead,
     prompt: bool,
     queue: VecDeque<Token>,
-    line: usize,                       // 今何行目か
-    comment: Vec<CharPos>,             // コメントの開始点
+    line: usize,           // 今何行目か
+    comment: Vec<CharPos>, // コメントの開始点
 }
 
 impl<BufRead: std::io::BufRead> Lexer<BufRead> {
@@ -23,7 +23,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         }
     }
     fn char_pos(&self, column: usize) -> CharPos {
-        CharPos::new(self.line, column + 1)
+        CharPos::new(self.line, column)
     }
     fn read_line(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
         if self.prompt {
@@ -44,10 +44,10 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
         self.line += 1;
 
         let mut prev: Option<TokenName> = None;
-
         let mut start_index = 0;
         let mut start_column = 0;
-        let mut prev_column = 0;
+
+        let mut string: bool = false;
 
         let mut iter = s.char_indices().enumerate().peekable();
 
@@ -72,10 +72,22 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 }
                 continue;
             }
+            if string {
+                if c == '"' {
+                    string = false;
+                } else if c == '\\' {
+                    iter.next();
+                }
+                continue;
+            }
             let next = match c {
                 'A'..='Z' | 'a'..='z' | '_' => Some(TokenName::Identifier { dollar: false }),
                 '$' => Some(TokenName::Identifier { dollar: true }),
-                '0'..='9' => Some(TokenName::Number{scientific: false}),
+                '0'..='9' => Some(TokenName::Number),
+                '"' => {
+                    string = true;
+                    Some(TokenName::String)
+                }
                 c if c.is_ascii_whitespace() => None,
                 '+' => Some(TokenName::Plus),
                 '-' => Some(TokenName::Minus),
@@ -101,13 +113,19 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                 _ => return Err(Error::UnexpectedCharacter(c, self.char_pos(column)).into()),
             };
             prev = match (prev, next) {
-                (Some(TokenName::Identifier { dollar }), Some(TokenName::Identifier { .. } | TokenName::Number{..})) => Some(TokenName::Identifier { dollar }),
-                (Some(TokenName::Number{scientific: true}), Some(TokenName::Number{..})) => Some(TokenName::Number{scientific: true}),
-                (Some(TokenName::Number{scientific: true}), Some(TokenName::Plus)) => Some(TokenName::Number{scientific: true}),
+                (Some(TokenName::Identifier { dollar }), Some(TokenName::Identifier { .. } | TokenName::Number)) => {
+                    Some(TokenName::Identifier { dollar })
+                }
+                (Some(TokenName::Number), Some(TokenName::Number) | Some(TokenName::Dot)) => Some(TokenName::Number),
                 (Some(TokenName::Dot), Some(TokenName::Number)) => Some(TokenName::Number),
+                (Some(TokenName::Number), _) if c == 'e' || c == 'E' => match iter.next() {
+                    Some((_, (_, '+' | '-' | '0'..='9'))) => Some(TokenName::Number),
+                    Some((_, (_, other))) => return Err(Error::UnexpectedCharacterAfterE(other, c, self.char_pos(column)).into()),
+                    None => return Err(Error::UnexpectedEndOfLineAfterE(c, self.char_pos(column)).into()),
+                },
                 (Some(TokenName::Slash), Some(TokenName::Slash)) => return Ok(true),
                 (Some(TokenName::Slash), Some(TokenName::Asterisk)) => {
-                    self.comment.push(self.char_pos(prev_column));
+                    self.comment.push(self.char_pos(start_column));
                     prev = None;
                     continue;
                 }
@@ -123,7 +141,7 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                         self.queue.push_back(Token {
                             name,
                             lexeme: s[start_index..index].to_string(),
-                            pos: Pos::new(self.char_pos(start_column), self.char_pos(prev_column)),
+                            pos: Pos::new(self.char_pos(start_column), self.char_pos(column)),
                         });
                     }
                     // 新しいトークンの開始
@@ -132,7 +150,6 @@ impl<BufRead: std::io::BufRead> Lexer<BufRead> {
                     next
                 }
             };
-            prev_column = column;
         }
 
         Ok(true)

@@ -4,6 +4,10 @@ use crate::pos::{CharPos, Pos};
 pub enum Error {
     #[error("unexpected character `{0}` at {1}")]
     UnexpectedCharacter(char, CharPos),
+    #[error("unexpected character `{0}` after `{1}` for scientific notation at {2}")]
+    UnexpectedCharacterAfterE(char, char, CharPos),
+    #[error("unexpected end of line after `{0}` for scientific notation at {1}")]
+    UnexpectedEndOfLineAfterE(char, CharPos),
     #[error("unterminated comment (started at {0})")]
     UnterminatedComment(CharPos),
     #[error("unterminated string literal (started at {0})")]

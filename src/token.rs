@@ -10,7 +10,7 @@ pub struct Token {
 #[derive(Debug)]
 pub enum TokenName {
     Identifier { dollar: bool },
-    Number{ scientific: bool },
+    Number,
     String,
     Plus,             // +
     Minus,            // -
