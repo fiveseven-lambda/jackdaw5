@@ -98,7 +98,7 @@ fn parse_factor(lexer: &mut Lexer<impl BufRead>) -> Result<Expression> {
                 name: TokenName::OpeningParen,
                 lexeme: lexeme_open,
                 pos: pos_open,
-            }) => match parse_list(lexer)? {
+            }) => match parse_args(lexer)? {
                 (
                     arg, // 引数
                     Some(Token {
@@ -167,7 +167,7 @@ def_binary_operator!(parse_operator4 => parse_operator5: TokenName::Less => Bina
 def_binary_operator!(parse_operator5 => parse_operator6: TokenName::DoubleEqual => BinaryOperator::Equal, TokenName::ExclamationEqual => BinaryOperator::NotEqual);
 def_binary_operator!(parse_operator6 => parse_operator: TokenName::DoubleAmpersand => BinaryOperator::And, TokenName::DoubleBar => BinaryOperator::Or);
 
-fn parse_list(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
+fn parse_args(lexer: &mut Lexer<impl BufRead>) -> Result<Vec<Expression>> {
     let mut ret = Vec::new();
     loop {
         let (item, delimiter) = parse_operator(lexer)?;
