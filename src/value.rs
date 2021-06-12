@@ -1,3 +1,4 @@
+use crate::function::{Function, PrimitiveRealFunction1, PrimitiveRealFunction2, RealFunction};
 use crate::sound::Sound;
 
 use std::rc::Rc;
@@ -25,50 +26,11 @@ impl std::fmt::Debug for Value {
     }
 }
 
-use std::cell::Cell;
-
-pub enum Argument<'cell> {
-    Real(&'cell Cell<f64>),
-    Bool(&'cell Cell<bool>),
-    Sound(&'cell Cell<Sound>),
-    String(&'cell Cell<String>),
-}
-
-pub trait Function {
-    fn arguments(&self) -> Vec<Argument>;
-    fn invoke(&self) -> Value;
-}
-pub trait RealFunction {
-    fn arguments(&self) -> Vec<Argument>;
-    fn invoke(&self) -> f64;
-}
-
-pub struct PrimitiveRealFunction1(fn(f64) -> f64, Cell<f64>);
-impl PrimitiveRealFunction1 {
-    pub fn new(fnc: fn(f64) -> f64) -> PrimitiveRealFunction1 {
-        PrimitiveRealFunction1(fnc, Cell::new(0.))
+impl Value {
+    pub fn real_function_1(f: fn(f64) -> f64) -> Value {
+        Value::RealFunction(Rc::new(PrimitiveRealFunction1::new(f.into())))
     }
-}
-impl RealFunction for PrimitiveRealFunction1 {
-    fn arguments(&self) -> Vec<Argument> {
-        vec![Argument::Real(&self.1)]
-    }
-    fn invoke(&self) -> f64 {
-        self.0(self.1.get())
-    }
-}
-
-pub struct PrimitiveRealFunction2(fn(f64, f64) -> f64, Cell<f64>, Cell<f64>);
-impl PrimitiveRealFunction2 {
-    pub fn new(fnc: fn(f64, f64) -> f64) -> PrimitiveRealFunction2 {
-        PrimitiveRealFunction2(fnc, Cell::new(0.), Cell::new(0.))
-    }
-}
-impl RealFunction for PrimitiveRealFunction2 {
-    fn arguments(&self) -> Vec<Argument> {
-        vec![Argument::Real(&self.1), Argument::Real(&self.2)]
-    }
-    fn invoke(&self) -> f64 {
-        self.0(self.1.get(), self.2.get())
+    pub fn real_function_2(f: fn(f64, f64) -> f64) -> Value {
+        Value::RealFunction(Rc::new(PrimitiveRealFunction2::new(f.into())))
     }
 }
