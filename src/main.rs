@@ -32,7 +32,7 @@ fn main() {
             Ok(Some(expression)) => {
                 // println!("{:#?}", expression);
                 match expression.evaluate(&variables) {
-                    Some(Ok(value)) => println!("{:?}", value),
+                    Some(Ok(value)) => println!("{:#?}", value),
                     Some(Err(err)) => println!("{}", err),
                     None => println!("empty statement"),
                 }

@@ -161,22 +161,22 @@ macro_rules! def_binary_operator {
 
 def_binary_operator! {
     parse_factor => parse_operator1:
-        TokenName::Circumflex => BinaryOperator::Pow,
+        TokenName::DoubleLess => BinaryOperator::LeftShift,
+        TokenName::DoubleGreater => BinaryOperator::RightShift,
 }
 def_binary_operator! {
     parse_operator1 => parse_operator2:
+        TokenName::Circumflex => BinaryOperator::Pow,
+}
+def_binary_operator! {
+    parse_operator2 => parse_operator3:
         TokenName::Asterisk => BinaryOperator::Mul,
         TokenName::Slash => BinaryOperator::Div,
 }
 def_binary_operator! {
-    parse_operator2 => parse_operator3:
+    parse_operator3 => parse_operator4:
         TokenName::Plus => BinaryOperator::Add,
         TokenName::Minus => BinaryOperator::Sub,
-}
-def_binary_operator! {
-    parse_operator3 => parse_operator4:
-        TokenName::DoubleLess => BinaryOperator::LeftShift,
-        TokenName::DoubleGreater => BinaryOperator::RightShift,
 }
 def_binary_operator! {
     parse_operator4 => parse_operator5:

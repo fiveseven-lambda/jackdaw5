@@ -314,7 +314,28 @@ impl PosNode {
                             .into_iter()
                             .filter_map(|expression| expression.evaluate(variables))
                             .collect::<Result<_, _>>()?;
-                        todo!();
+                        match (arguments.get(0), arguments.get(1)) {
+                            (Some(Value::String(filename)), Some(Value::Real(time))) => {
+                                let samplerate = 44100;
+                                let mut iter = sound.iter(samplerate as f64);
+                                let spec = hound::WavSpec {
+                                    channels: 1,
+                                    sample_rate: samplerate,
+                                    bits_per_sample: 32,
+                                    sample_format: hound::SampleFormat::Int,
+                                };
+                                let mut writer = hound::WavWriter::create(filename, spec).unwrap();
+                                let amplitude = std::i32::MAX as f64;
+                                for _ in 0..(time * samplerate as f64) as i64 {
+                                    writer.write_sample((amplitude * iter.next()) as i32).unwrap();
+                                }
+                                writer.finalize().unwrap();
+                                Ok(Value::Bool(true))
+                            }
+                            _ => {
+                                panic!("wrong number of arguments");
+                            }
+                        }
                     }
                     _ => Err(Error::NotAFunction(self.pos.clone())),
                 },

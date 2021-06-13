@@ -77,6 +77,10 @@ impl Function for Exp {
         vec![Argument::Real(&self.0)]
     }
     fn invoke(&self) -> Value {
-        Value::Sound(Sound::Exp { base: self.0.get() })
+        let tau = self.0.get(); // 時定数
+        Value::Sound(Sound::Exp {
+            coefficient: -1. / tau,
+            intercept: 1.,
+        })
     }
 }
