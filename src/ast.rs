@@ -199,7 +199,7 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Sound(left), Value::Real(right)) => Ok(Value::Sound(left.shift(-right))),
+                        (Value::Sound(left), Value::Real(right)) => Ok(Value::Sound(left.shift(right))),
                         (left, right) => return Err(Error::TypeMismatchLeftShift(left, right, self.pos)),
                     }
                 }
@@ -207,7 +207,7 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Sound(left), Value::Real(right)) => Ok(Value::Sound(left.shift(right))),
+                        (Value::Sound(left), Value::Real(right)) => Ok(Value::Sound(left.shift(-right))),
                         (left, right) => return Err(Error::TypeMismatchRightShift(left, right, self.pos)),
                     }
                 }
