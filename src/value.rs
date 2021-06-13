@@ -6,7 +6,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub enum Value {
     Real(f64),
-    Bool(bool),
+    Boolean(bool),
     Sound(Sound),
     String(String),
     Function(Rc<dyn Function>),
@@ -17,9 +17,9 @@ impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Value::Real(value) => write!(f, "{}", value),
-            Value::Bool(value) => write!(f, "{}", value),
+            Value::Boolean(value) => write!(f, "{}", value),
             Value::String(value) => write!(f, "{}", value),
-            Value::Sound(value) => write!(f, "{:?}", value),
+            Value::Sound(_) => write!(f, "Sound",),
             Value::Function(_) => write!(f, "function"),
             Value::RealFunction(_) => write!(f, "real function"),
         }

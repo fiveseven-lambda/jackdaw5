@@ -1,4 +1,11 @@
-#[derive(Clone, Debug)]
+use crate::function::Argument;
+use crate::function::RealFunction;
+use crate::value::Value;
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+#[derive(Clone)]
 pub enum Sound {
     Const(f64),
     Linear { slope: f64, intercept: f64 },    // x = at + b
@@ -12,6 +19,7 @@ pub enum Sound {
     Mul(Box<Sound>, Box<Sound>),
     Div(Box<Sound>, Box<Sound>),
     Pow(Box<Sound>, Box<Sound>),
+    Function(Rc<dyn RealFunction>, Vec<Value>, HashMap<String, Value>),
 }
 
 use std::f64::consts::TAU;
@@ -20,7 +28,7 @@ impl Sound {
     pub fn shift(self, t: f64) -> Self {
         match self {
             Sound::Const(value) => Sound::Const(value),
-            Sound::Linear {slope, intercept} => Sound::Linear {
+            Sound::Linear { slope, intercept } => Sound::Linear {
                 slope,
                 intercept: slope * t + intercept,
             },
@@ -30,7 +38,7 @@ impl Sound {
             },
             Sound::Exp { coefficient, intercept } => Sound::Exp {
                 coefficient,
-                intercept: intercept * (coefficient * t).exp()
+                intercept: intercept * (coefficient * t).exp(),
             },
             Sound::Rand => Sound::Rand,
             Sound::Minus(sound) => Sound::Minus(sound.shift(t).into()),
@@ -40,6 +48,21 @@ impl Sound {
             Sound::Mul(left, right) => Sound::Mul(left.shift(t).into(), right.shift(t).into()),
             Sound::Div(left, right) => Sound::Div(left.shift(t).into(), right.shift(t).into()),
             Sound::Pow(left, right) => Sound::Pow(left.shift(t).into(), right.shift(t).into()),
+            Sound::Function(function, vec, map) => Sound::Function(
+                function,
+                vec.into_iter()
+                    .map(|value| match value {
+                        Value::Sound(sound) => Value::Sound(sound.shift(t)),
+                        other => other,
+                    })
+                    .collect(),
+                map.into_iter()
+                    .map(|tuple| match tuple {
+                        (key, Value::Sound(sound)) => (key, Value::Sound(sound.shift(t))),
+                        other => other,
+                    })
+                    .collect(),
+            ),
         }
     }
     pub fn iter(self, samplerate: f64) -> SoundIter {
@@ -65,6 +88,17 @@ impl Sound {
             Sound::Mul(left, right) => SoundIter::Mul(left.iter(samplerate).into(), right.iter(samplerate).into()),
             Sound::Div(left, right) => SoundIter::Div(left.iter(samplerate).into(), right.iter(samplerate).into()),
             Sound::Pow(left, right) => SoundIter::Pow(left.iter(samplerate).into(), right.iter(samplerate).into()),
+            Sound::Function(function, vec, map) => {
+                let (f_vec, f_map) = function.arguments();
+                let mut sounds = Vec::new();
+                for tuple in f_vec.into_iter().zip(vec) {
+                    match tuple {
+                        (Argument::Real(cell), Value::Sound(sound)) => sounds.push((cell, sound.iter(samplerate))),
+                        (cell, value) => cell.set(value).unwrap(),
+                    }
+                }
+                SoundIter::Function(function, sounds)
+            }
         }
     }
 }
@@ -85,6 +119,7 @@ pub enum SoundIter {
     Mul(Box<SoundIter>, Box<SoundIter>),
     Div(Box<SoundIter>, Box<SoundIter>),
     Pow(Box<SoundIter>, Box<SoundIter>),
+    Function(Rc<dyn RealFunction>, Vec<(Rc<Cell<f64>>, SoundIter)>),
 }
 
 impl SoundIter {
@@ -114,6 +149,12 @@ impl SoundIter {
             SoundIter::Mul(left, right) => left.next() * right.next(),
             SoundIter::Div(left, right) => left.next() / right.next(),
             SoundIter::Pow(left, right) => left.next().powf(right.next()),
+            SoundIter::Function(function, vec) => {
+                for (cell, sound) in vec {
+                    cell.set(sound.next());
+                }
+                function.invoke()
+            }
         }
     }
 }

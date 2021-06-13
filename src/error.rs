@@ -61,8 +61,12 @@ pub enum Error {
     TypeMismatchOr1(Value, Pos),
     #[error("type mismatch: operator || (or) expected bool, but found {0:?} and {1:?} at {2}")]
     TypeMismatchOr2(Value, Value, Pos),
+    #[error("type mismatch: function expected {0}-th argument of type {1}, but found {2:?} at {3}")]
+    TypeMismatchArgument(usize, &'static str, Value, Pos),
     #[error("not a function (at {0})")]
     NotAFunction(Pos),
+    #[error("wrong number of arguments, expected {0}, found {1} (at {2})")]
+    WrongNumberOfArguments(usize, usize, Pos),
     #[error("undefined variable `{0}` at {1}")]
     UndefinedVariable(String, Pos),
 }

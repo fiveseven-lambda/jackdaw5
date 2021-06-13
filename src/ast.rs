@@ -115,7 +115,7 @@ impl PosNode {
                         _ => Err(Error::TypeMismatchReciprocal(value, self.pos)),
                     },
                     UnaryOperator::Not => match value {
-                        Value::Bool(value) => Ok(Value::Bool(!value)),
+                        Value::Boolean(value) => Ok(Value::Boolean(!value)),
                         _ => Err(Error::TypeMismatchNot(value, self.pos)),
                     },
                 }
@@ -181,8 +181,8 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Real(left), Value::Real(right)) => Ok(Value::Bool(left < right)),
-                        (Value::String(left), Value::String(right)) => Ok(Value::Bool(left < right)),
+                        (Value::Real(left), Value::Real(right)) => Ok(Value::Boolean(left < right)),
+                        (Value::String(left), Value::String(right)) => Ok(Value::Boolean(left < right)),
                         (left, right) => return Err(Error::TypeMismatchLess(left, right, self.pos)),
                     }
                 }
@@ -190,8 +190,8 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Real(left), Value::Real(right)) => Ok(Value::Bool(left > right)),
-                        (Value::String(left), Value::String(right)) => Ok(Value::Bool(left > right)),
+                        (Value::Real(left), Value::Real(right)) => Ok(Value::Boolean(left > right)),
+                        (Value::String(left), Value::String(right)) => Ok(Value::Boolean(left > right)),
                         (left, right) => return Err(Error::TypeMismatchGreater(left, right, self.pos)),
                     }
                 }
@@ -215,9 +215,9 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Real(left), Value::Real(right)) => Ok(Value::Bool((left - right).abs() <= 1e-6)),
-                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left == right)),
-                        (Value::String(left), Value::String(right)) => Ok(Value::Bool(left == right)),
+                        (Value::Real(left), Value::Real(right)) => Ok(Value::Boolean((left - right).abs() <= 1e-6)),
+                        (Value::Boolean(left), Value::Boolean(right)) => Ok(Value::Boolean(left == right)),
+                        (Value::String(left), Value::String(right)) => Ok(Value::Boolean(left == right)),
                         (left, right) => return Err(Error::TypeMismatchEqual(left, right, self.pos)),
                     }
                 }
@@ -225,37 +225,37 @@ impl PosNode {
                     let left = eval!(left, variables, self.pos);
                     let right = eval!(right, variables, self.pos);
                     match (left, right) {
-                        (Value::Real(left), Value::Real(right)) => Ok(Value::Bool((left - right).abs() > 1e-6)),
-                        (Value::Bool(left), Value::Bool(right)) => Ok(Value::Bool(left != right)),
-                        (Value::String(left), Value::String(right)) => Ok(Value::Bool(left != right)),
+                        (Value::Real(left), Value::Real(right)) => Ok(Value::Boolean((left - right).abs() > 1e-6)),
+                        (Value::Boolean(left), Value::Boolean(right)) => Ok(Value::Boolean(left != right)),
+                        (Value::String(left), Value::String(right)) => Ok(Value::Boolean(left != right)),
                         (left, right) => return Err(Error::TypeMismatchNotEqual(left, right, self.pos)),
                     }
                 }
                 BinaryOperator::And => {
                     let left = eval!(left, variables, self.pos);
                     match left {
-                        Value::Bool(true) => {
+                        Value::Boolean(true) => {
                             let right = eval!(right, variables, self.pos);
                             match right {
-                                Value::Bool(value) => Ok(Value::Bool(value)),
+                                Value::Boolean(value) => Ok(Value::Boolean(value)),
                                 right => return Err(Error::TypeMismatchAnd2(left, right, self.pos)),
                             }
                         }
-                        Value::Bool(false) => Ok(Value::Bool(false)),
+                        Value::Boolean(false) => Ok(Value::Boolean(false)),
                         left => return Err(Error::TypeMismatchAnd1(left, self.pos)),
                     }
                 }
                 BinaryOperator::Or => {
                     let left = eval!(left, variables, self.pos);
                     match left {
-                        Value::Bool(false) => {
+                        Value::Boolean(false) => {
                             let right = eval!(right, variables, self.pos);
                             match right {
-                                Value::Bool(value) => Ok(Value::Bool(value)),
+                                Value::Boolean(value) => Ok(Value::Boolean(value)),
                                 right => return Err(Error::TypeMismatchOr2(left, right, self.pos)),
                             }
                         }
-                        Value::Bool(true) => Ok(Value::Bool(true)),
+                        Value::Boolean(true) => Ok(Value::Boolean(true)),
                         left => return Err(Error::TypeMismatchOr1(left, self.pos)),
                     }
                 }
@@ -267,47 +267,40 @@ impl PosNode {
                             .into_iter()
                             .filter_map(|expression| expression.evaluate(variables))
                             .collect::<Result<_, _>>()?;
-                        let cells = function.arguments();
-                        if cells.len() != arguments.len() {
-                            panic!();
+                        let (vec, map) = function.arguments();
+                        if vec.len() != arguments.len() {
+                            return Err(Error::WrongNumberOfArguments(vec.len(), arguments.len(), self.pos));
                         }
-                        cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
-                            (Argument::Real(cell), Value::Real(value)) => {
-                                cell.replace(value);
+                        for (i, (cell, value)) in vec.into_iter().zip(arguments).enumerate() {
+                            if let Err((type_name, value)) = cell.set(value) {
+                                return Err(Error::TypeMismatchArgument(i + 1, type_name, value, self.pos));
                             }
-                            (Argument::Bool(cell), Value::Bool(value)) => {
-                                cell.replace(value);
-                            }
-                            (Argument::Sound(cell), Value::Sound(value)) => {
-                                cell.replace(value);
-                            }
-                            _ => panic!(),
-                        });
+                        }
                         Ok(function.invoke())
                     }
                     Value::RealFunction(function) => {
-                        // todo: RealFunction には Sound も渡せるようにする
                         let arguments: Vec<_> = arguments
                             .into_iter()
                             .filter_map(|expression| expression.evaluate(variables))
                             .collect::<Result<_, _>>()?;
-                        let cells = function.arguments();
-                        if cells.len() != arguments.len() {
-                            panic!();
+                        let (vec, map) = function.arguments();
+                        if vec.len() != arguments.len() {
+                            return Err(Error::WrongNumberOfArguments(vec.len(), arguments.len(), self.pos));
                         }
-                        cells.into_iter().zip(arguments.into_iter()).for_each(|tuple| match tuple {
-                            (Argument::Real(cell), Value::Real(value)) => {
-                                cell.replace(value);
+                        if vec
+                            .iter()
+                            .zip(&arguments)
+                            .any(|tuple| matches!(tuple, (Argument::Real(_), Value::Sound(_))))
+                        {
+                            Ok(Value::Sound(Sound::Function(function, arguments, HashMap::new())))
+                        } else {
+                            for (i, (cell, value)) in vec.into_iter().zip(arguments).enumerate() {
+                                if let Err((type_name, value)) = cell.set(value) {
+                                    return Err(Error::TypeMismatchArgument(i + 1, type_name, value, self.pos));
+                                }
                             }
-                            (Argument::Bool(cell), Value::Bool(value)) => {
-                                cell.replace(value);
-                            }
-                            (Argument::Sound(cell), Value::Sound(value)) => {
-                                cell.replace(value);
-                            }
-                            _ => panic!(),
-                        });
-                        Ok(Value::Real(function.invoke()))
+                            Ok(Value::Real(function.invoke()))
+                        }
                     }
                     Value::Sound(sound) => {
                         let arguments: Vec<_> = arguments
@@ -330,7 +323,7 @@ impl PosNode {
                                     writer.write_sample((amplitude * iter.next()) as i32).unwrap();
                                 }
                                 writer.finalize().unwrap();
-                                Ok(Value::Bool(true))
+                                Ok(Value::Boolean(true))
                             }
                             _ => {
                                 panic!("wrong number of arguments");

@@ -21,10 +21,11 @@ fn main() {
     variables.insert("min".to_string(), value::Value::real_function_2(f64::min));
     variables.insert("E".to_string(), value::Value::Real(std::f64::consts::E));
     variables.insert("PI".to_string(), value::Value::Real(std::f64::consts::PI));
-    variables.insert("True".to_string(), value::Value::Bool(true));
-    variables.insert("False".to_string(), value::Value::Bool(false));
+    variables.insert("True".to_string(), value::Value::Boolean(true));
+    variables.insert("False".to_string(), value::Value::Boolean(false));
     variables.insert("Sin".to_string(), value::Value::Function(std::rc::Rc::new(function::Sin::new())));
     variables.insert("Exp".to_string(), value::Value::Function(std::rc::Rc::new(function::Exp::new())));
+    variables.insert("Linear".to_string(), value::Value::Function(std::rc::Rc::new(function::Linear::new())));
     variables.insert("Rand".to_string(), value::Value::Sound(sound::Sound::Rand));
 
     loop {
