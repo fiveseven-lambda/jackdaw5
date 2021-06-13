@@ -100,9 +100,8 @@ impl Function for Exp {
         (vec![Argument::Real(self.0.clone())], HashMap::new())
     }
     fn invoke(&self) -> Value {
-        let tau = self.0.get(); // 時定数
         Value::Sound(Sound::Exp {
-            coefficient: -1. / tau,
+            coefficient: 1. / self.0.get(),
             intercept: 1.,
         })
     }
